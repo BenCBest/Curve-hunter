@@ -3,7 +3,7 @@ const fs    = require('fs');
 const path  = require('path');
 const { WebSocketServer } = require('ws');
 const { v4: uuidv4 } = require('uuid');
-const { queue5, queue2 } = require('./matchmaking');
+const { queue5, queue2, queue5mobile, queue2mobile } = require('./matchmaking');
 const Room = require('./room');
 
 const PORT = process.env.PORT || 8080;
@@ -47,16 +47,20 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
       case 'join_queue': {
-        const q = msg.mode === '1v1' ? queue2 : queue5;
-        const qKey = msg.mode === '1v1' ? 'q2' : 'q5';
+        const mobile = msg.platform === 'mobile';
+        let q, qKey;
+        if (msg.mode === '1v1') { q = mobile ? queue2mobile : queue2; qKey = mobile ? 'q2m' : 'q2'; }
+        else                    { q = mobile ? queue5mobile : queue5; qKey = mobile ? 'q5m' : 'q5'; }
         playerQueue.set(playerId, qKey);
         q.addPlayer(ws, playerId);
         break;
       }
       case 'leave_queue': {
         const qKey = playerQueue.get(playerId);
-        if (qKey === 'q2') queue2.removePlayer(playerId);
-        else queue5.removePlayer(playerId);
+        if      (qKey === 'q2')  queue2.removePlayer(playerId);
+        else if (qKey === 'q2m') queue2mobile.removePlayer(playerId);
+        else if (qKey === 'q5m') queue5mobile.removePlayer(playerId);
+        else                     queue5.removePlayer(playerId);
         playerQueue.delete(playerId);
         break;
       }
@@ -70,8 +74,10 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     const qKey = playerQueue.get(playerId);
-    if (qKey === 'q2') queue2.removePlayer(playerId);
-    else queue5.removePlayer(playerId);
+    if      (qKey === 'q2')  queue2.removePlayer(playerId);
+    else if (qKey === 'q2m') queue2mobile.removePlayer(playerId);
+    else if (qKey === 'q5m') queue5mobile.removePlayer(playerId);
+    else                     queue5.removePlayer(playerId);
     playerQueue.delete(playerId);
 
     const room = playerRoom.get(playerId);
@@ -101,6 +107,8 @@ function createRoom(players) {
 
 queue5.onRoomReady(createRoom);
 queue2.onRoomReady(createRoom);
+queue5mobile.onRoomReady(createRoom);
+queue2mobile.onRoomReady(createRoom);
 
 server.listen(PORT, () => console.log(`Curve Racer Server läuft auf Port ${PORT}`));
 

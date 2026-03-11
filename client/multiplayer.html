@@ -80,7 +80,7 @@ resize();window.addEventListener('resize',()=>{resize();if(phase==='sp-preview')
 
 const TURN_RATE=4.5,ACCEL=Math.LN2/8,DECEL=Math.LN2/5,MIN_SPD=100,MAX_SPD=3000,PRADIUS=14;
 const BOT_COLORS=['#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22'];
-const NUM_BOTS=15,NUM_OBS=20;
+const NUM_BOTS=15,NUM_OBS=15;
 
 let phase='menu';
 let animId=null,lastTime=null,spStartTime=null,spMaxSpeed=MIN_SPD;
@@ -106,7 +106,6 @@ function sc(x,y){return{x:x/_mapW*canvas.width,y:y/_mapH*canvas.height};}
 function drawBg(obs){
   const W=canvas.width,H=canvas.height,sx=W/_mapW,sy=H/_mapH;
   ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='#e74c3c';ctx.lineWidth=3;ctx.strokeRect(1,1,W-2,H-2);
   ctx.fillStyle='#3498db';
   for(const o of obs){ctx.fillRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);ctx.strokeStyle='#5dade2';ctx.lineWidth=1;ctx.strokeRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);}
 }
@@ -250,11 +249,13 @@ let ws=null,myId=null,mpData=null,mpMode='5p';
 function sendInput(){if(phase!=='mp-active'||!ws||ws.readyState!==1)return;const dir=keys.ArrowLeft?'left':keys.ArrowRight?'right':'none';ws.send(JSON.stringify({type:'input',direction:dir}));}
 function getUrl(){const p=location.protocol==='https:'?'wss':'ws';return p+'://'+location.host;}
 
+function isMobile(){return window.matchMedia('(pointer: coarse)').matches||window.innerWidth<=768;}
+
 function connect(mode){
   mpMode=mode;errEl.textContent='';
   try{ws=new WebSocket(getUrl());}catch(e){errEl.textContent='Verbindung fehlgeschlagen.';return;}
   ws.onopen=()=>{
-    ws.send(JSON.stringify({type:'join_queue',mode:mode==='1v1'?'1v1':'5p'}));
+    ws.send(JSON.stringify({type:'join_queue',mode:mode==='1v1'?'1v1':'5p',platform:isMobile()?'mobile':'desktop'}));
     waitTitleEl.textContent=mode==='1v1'?'Suche Gegner...':'Suche Spieler...';
     qcEl.textContent='0 / '+(mode==='1v1'?'2':'5')+' Spieler';
     showScreen('wait');phase='mp-wait';
@@ -327,8 +328,8 @@ document.getElementById('btn-cancel').addEventListener('click',()=>{
 document.getElementById('btn-again').addEventListener('click',()=>{
   hudEl.classList.add('hidden');specEl.style.display='none';
   if(spLastMode==='single'){spInit();spDrawPreview();spStartCountdown();}
-  else if(spLastMode==='1v1'){showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'1v1'}));else connect('1v1');}
-  else{showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'5p'}));else connect('5p');}
+  else if(spLastMode==='1v1'){showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'1v1',platform:isMobile()?'mobile':'desktop'}));else connect('1v1');}
+  else{showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'5p',platform:isMobile()?'mobile':'desktop'}));else connect('5p');}
 });
 document.getElementById('btn-menu').addEventListener('click',()=>{
   disconnect();showScreen('menu');phase='menu';hudEl.classList.add('hidden');specEl.style.display='none';

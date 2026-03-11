@@ -42,4 +42,6 @@ class Matchmaking {
 module.exports = {
   queue5: new Matchmaking(5),
   queue2: new Matchmaking(2),
+  queue5mobile: new Matchmaking(5),
+  queue2mobile: new Matchmaking(2),
 };
