@@ -1,0 +1,19 @@
+{
+  "name": "curve-racer-multiplayer",
+  "version": "1.0.0",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  }
+}

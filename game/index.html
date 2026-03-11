@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Curve Racer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; }
+    canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
+    #hud {
+      position: absolute; top: 16px; left: 16px; z-index: 2;
+      color: #fff; font-family: monospace; font-size: 14px; line-height: 1.8;
+      pointer-events: none;
+    }
+    #overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7); color: white; font-family: monospace;
+    }
+    #overlay h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+    #overlay p  { font-size: 1rem; color: #aaa; margin-bottom: 0.4rem; }
+    #overlay button {
+      margin-top: 1.5rem; padding: 0.6rem 2rem; font-size: 1rem;
+      background: #e74c3c; border: none; color: white; cursor: pointer;
+      font-family: monospace; border-radius: 4px;
+    }
+    #overlay button:hover { background: #c0392b; }
+    #overlay.hidden { display: none; }
+    #countdown {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      font-size: 8rem; font-family: monospace; color: #fff;
+      pointer-events: none; z-index: 3; display: none;
+      text-shadow: 0 0 40px rgba(231,76,60,0.8);
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div>Geschwindigkeit: <span id="spd">0</span></div>
+  <div>Höchstgeschwindigkeit: <span id="maxspd">0</span></div>
+  <div>Zeit: <span id="time">0.0</span>s</div>
+</div>
+<div id="overlay">
+  <h1>Curve Racer</h1>
+  <p>← → Pfeiltasten zum Lenken</p>
+  <p>Keine Taste = beschleunigen</p>
+  <p>Taste gedrückt = abbremsen + kurven</p>
+  <p>Weiche den Hindernissen und Rändern aus!</p>
+  <button id="startBtn">Starten</button>
+</div>
+<div id="countdown"></div>
+<script>
+const canvas      = document.getElementById('c');
+const ctx         = canvas.getContext('2d');
+const overlay     = document.getElementById('overlay');
+const countdownEl = document.getElementById('countdown');
+const spdEl       = document.getElementById('spd');
+const maxSpdEl    = document.getElementById('maxspd');
+const timeEl      = document.getElementById('time');
+
+const TURN_RATE     = 4.5;
+const ACCEL_FACTOR  = Math.LN2 / 8;
+const DECEL_FACTOR  = Math.LN2 / 5;
+const MIN_SPEED     = 100;
+const MAX_SPEED     = 3000;
+const PRADIUS       = 14;
+const NUM_OBSTACLES = 20;
+const NUM_BOTS      = 15;
+const BOT_COLORS    = ['#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22'];
+
+let player, bots, obstacles, gameRunning = false, startTime, maxSpeed, animId, lastTime;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', () => { resize(); if (!gameRunning) drawPreview(); });
+
+const keys = { ArrowLeft: false, ArrowRight: false };
+window.addEventListener('keydown', e => { if (e.key in keys) { keys[e.key] = true; e.preventDefault(); } });
+window.addEventListener('keyup',   e => { if (e.key in keys) { keys[e.key] = false; } });
+
+function circleRect(cx, cy, r, rx, ry, rw, rh) {
+  const nx = Math.max(rx, Math.min(cx, rx+rw));
+  const ny = Math.max(ry, Math.min(cy, ry+rh));
+  const dx = cx-nx, dy = cy-ny;
+  return dx*dx+dy*dy < r*r;
+}
+
+function raycastCurved(ox, oy, angle, speed, turnDir, maxDist, W, H) {
+  const steps = 60, stepSize = maxDist/steps;
+  const tr = turnDir !== 0 ? TURN_RATE/(1+Math.pow(speed/300,2)*8) : 0;
+  let cx=ox, cy=oy, ca=angle;
+  const m = PRADIUS+14;
+  for (let i=1; i<=steps; i++) {
+    ca += tr*turnDir*(stepSize/Math.max(speed,1));
+    cx += Math.cos(ca)*stepSize; cy += Math.sin(ca)*stepSize;
+    if (cx<m||cx>W-m||cy<m||cy>H-m) return stepSize*i;
+    for (const o of obstacles) if (circleRect(cx,cy,PRADIUS+14,o.x,o.y,o.w,o.h)) return stepSize*i;
+  }
+  return maxDist;
+}
+
+function angleDiff(target, current) {
+  let d = target-current;
+  while (d> Math.PI) d-=Math.PI*2;
+  while (d<-Math.PI) d+=Math.PI*2;
+  return d;
+}
+
+function hexToRgb(hex) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgb(${r},${g},${b})`;
+}
+
+function randomObstacles() {
+  const obs=[], W=canvas.width, H=canvas.height;
+  const GAP = 20; // min gap between obstacles
+  for (let i=0; i<NUM_OBSTACLES; i++) {
+    let placed = false;
+    for (let attempt=0; attempt<100; attempt++) {
+      const w=20+Math.random()*220, h=15+Math.random()*160;
+      const x=60+Math.random()*(W-w-120), y=60+Math.random()*(H-h-120);
+      // check overlap with existing obstacles
+      let overlap = false;
+      for (const o of obs) {
+        if (x < o.x+o.w+GAP && x+w > o.x-GAP && y < o.y+o.h+GAP && y+h > o.y-GAP) {
+          overlap = true; break;
+        }
+      }
+      if (!overlap) { obs.push({x,y,w,h}); placed=true; break; }
+    }
+    // if no valid spot found after 100 attempts, skip this obstacle
+  }
+  return obs;
+}
+
+function safePlayerPos(W, H) {
+  const px = W/2, py = H*0.75;
+  for (const o of obstacles) {
+    if (circleRect(px, py, PRADIUS+20, o.x, o.y, o.w, o.h)) return {x: px, y: py-100};
+  }
+  return {x: px, y: py};
+}
+
+function safePos(W, H, excludeX, excludeY) {
+  const margin = PRADIUS+40;
+  for (let i=0; i<100; i++) {
+    const x = margin + Math.random()*(W-margin*2);
+    const y = margin + Math.random()*(H-margin*2);
+    const dx = x-excludeX, dy = y-excludeY;
+    if (dx*dx+dy*dy < 80*80) continue;
+    let blocked = false;
+    for (const o of obstacles) if (circleRect(x,y,PRADIUS+20,o.x,o.y,o.w,o.h)) { blocked=true; break; }
+    if (!blocked) return {x, y};
+  }
+  return {x: W/2+(Math.random()-0.5)*200, y: H/3};
+}
+
+function initLevel() {
+  const W=canvas.width, H=canvas.height;
+  obstacles = randomObstacles();
+  const ps = safePlayerPos(W, H);
+  player = {x:ps.x, y:ps.y, angle:-Math.PI/2, speed:MIN_SPEED, trail:[]};
+  bots = Array.from({length:NUM_BOTS}, () => {
+    const pos = safePos(W, H, ps.x, ps.y);
+    return {
+      x:pos.x, y:pos.y,
+      angle: Math.random()*Math.PI*2,
+      speed:MIN_SPEED,
+      color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],
+      turning:0, thinkTimer:0, trail:[], dead:false
+    };
+  });
+}
+
+function drawScene() {
+  const W=canvas.width, H=canvas.height;
+  ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#e74c3c'; ctx.lineWidth=3; ctx.strokeRect(1,1,W-2,H-2);
+  ctx.fillStyle='#3498db';
+  for (const o of obstacles) {
+    ctx.fillRect(o.x,o.y,o.w,o.h);
+    ctx.strokeStyle='#5dade2'; ctx.lineWidth=1; ctx.strokeRect(o.x,o.y,o.w,o.h);
+  }
+}
+
+function drawPreview() {
+  drawScene();
+  // bots
+  for (const bot of bots) {
+    // fake trail pointing backwards
+    const fakeTrail = [];
+    for (let i = 8; i >= 0; i--) {
+      fakeTrail.push({
+        x: bot.x + Math.cos(bot.angle + Math.PI) * i * 6,
+        y: bot.y + Math.sin(bot.angle + Math.PI) * i * 6
+      });
+    }
+    fakeTrail.push({x: bot.x, y: bot.y});
+    drawTrail(fakeTrail, MIN_SPEED, hexToRgb(bot.color));
+    ctx.beginPath(); ctx.arc(bot.x,bot.y,PRADIUS,0,Math.PI*2); ctx.fillStyle=bot.color; ctx.fill();
+  }
+  // player fake trail
+  const playerFake = [];
+  for (let i = 8; i >= 0; i--) {
+    playerFake.push({
+      x: player.x + Math.cos(player.angle + Math.PI) * i * 6,
+      y: player.y + Math.sin(player.angle + Math.PI) * i * 6
+    });
+  }
+  playerFake.push({x: player.x, y: player.y});
+  drawTrail(playerFake, MIN_SPEED, 'rgb(231,76,60)');
+  // player
+  const px=player.x, py=player.y;
+  ctx.beginPath(); ctx.arc(px,py,PRADIUS,0,Math.PI*2); ctx.fillStyle='#e74c3c'; ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 14px monospace'; ctx.textAlign='center';
+  ctx.fillText('⬆ Das bist du!', px, py-PRADIUS-14);
+}
+
+initLevel();
+drawPreview();
+
+function updateBot(bot, dt, W, H) {
+  if (bot.dead) return;
+  const emgMargin = PRADIUS+60+Math.pow(bot.speed,2)/800;
+  if (bot.x<emgMargin||bot.x>W-emgMargin||bot.y<emgMargin||bot.y>H-emgMargin) {
+    const d = angleDiff(Math.atan2(H/2-bot.y, W/2-bot.x), bot.angle);
+    bot.turning = d>0?1:-1; bot.thinkTimer=0;
+  } else {
+    bot.thinkTimer -= dt;
+    if (bot.thinkTimer <= 0) {
+      bot.thinkTimer = 0.03+Math.random()*0.02;
+      const look = Math.max(200, bot.speed*1.8);
+      const ahead = raycastCurved(bot.x,bot.y,bot.angle,bot.speed, 0,look,W,H);
+      const left  = raycastCurved(bot.x,bot.y,bot.angle,bot.speed,-1,look,W,H);
+      const right = raycastCurved(bot.x,bot.y,bot.angle,bot.speed, 1,look,W,H);
+      if (ahead<look*0.7) { bot.turning=left>right?-1:1; }
+      else if (left<look*0.7&&right>=look*0.7) { bot.turning=1; }
+      else if (right<look*0.7&&left>=look*0.7) { bot.turning=-1; }
+      else {
+        const pdx=player.x-bot.x, pdy=player.y-bot.y;
+        const pdist=Math.sqrt(pdx*pdx+pdy*pdy);
+        if (pdist < 600) {
+          const pa=Math.atan2(pdy,pdx);
+          if (bot.speed > player.speed * 1.05) {
+            // close range: hunt directly
+            const d=angleDiff(pa,bot.angle); bot.turning=d>0.05?1:d<-0.05?-1:0;
+          } else if (bot.speed < player.speed * 0.9) {
+            // flee
+            const d=angleDiff(pa+Math.PI,bot.angle); bot.turning=d>0.1?1:d<-0.1?-1:0;
+          } else {
+            // similar speed: go straight to build up speed
+            bot.turning=0;
+          }
+        } else if (pdist < 1200) {
+          // far away: predict player position ~1.2s ahead and intercept
+          const predictT = 1.2;
+          const futureX = player.x + Math.cos(player.angle) * player.speed * predictT;
+          const futureY = player.y + Math.sin(player.angle) * player.speed * predictT;
+          const interceptAngle = Math.atan2(futureY - bot.y, futureX - bot.x);
+          const d = angleDiff(interceptAngle, bot.angle);
+          // only steer if significantly off course, otherwise go straight (accelerate)
+          if (Math.abs(d) > 0.15) bot.turning = d>0?1:-1;
+          else bot.turning = 0; // straight = accelerate
+        } else {
+          bot.turning=Math.random()<0.08?(Math.random()<0.5?-1:1):0;
+        }
+      }
+    }
+  }
+  const turning=bot.turning!==0;
+  if (turning) {
+    bot.speed=Math.max(MIN_SPEED,bot.speed*Math.exp(-DECEL_FACTOR*dt));
+    const tr=TURN_RATE/(1+Math.pow(bot.speed/300,2)*8);
+    bot.angle+=tr*bot.turning*dt;
+  } else { bot.speed=Math.min(MAX_SPEED,bot.speed*Math.exp(ACCEL_FACTOR*dt)); }
+  bot.x+=Math.cos(bot.angle)*bot.speed*dt;
+  bot.y+=Math.sin(bot.angle)*bot.speed*dt;
+  bot.trail.push({x:bot.x,y:bot.y});
+  if (bot.trail.length>300) bot.trail.shift();
+  if (bot.x<PRADIUS||bot.x>W-PRADIUS||bot.y<PRADIUS||bot.y>H-PRADIUS){bot.dead=true;return;}
+  for (const o of obstacles) if (circleRect(bot.x,bot.y,PRADIUS,o.x,o.y,o.w,o.h)){bot.dead=true;return;}
+}
+
+function drawTrail(trail, speed, color) {
+  if (trail.length < 2) return;
+  const tailLen = Math.min(trail.length, Math.floor(8 + speed/3));
+  const start = trail.length - tailLen;
+  const glow = Math.min(1, Math.max(0, (speed-200)/600));
+  ctx.save();
+  if (glow > 0) {
+    ctx.shadowColor = color.replace('rgb','rgba').replace(')',',1)');
+    ctx.shadowBlur = 10 + glow*60;
+    for (let i=start+1; i<trail.length; i++) {
+      const t=(i-start)/tailLen;
+      ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y);
+      ctx.strokeStyle=color.replace('rgb','rgba').replace(')',`,${t*glow*0.7})`);
+      ctx.lineWidth=6+t*(14+glow*35); ctx.stroke();
+    }
+  }
+  ctx.shadowBlur=0;
+  for (let i=start+1; i<trail.length; i++) {
+    const t=(i-start)/tailLen;
+    ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y);
+    ctx.strokeStyle=color.replace('rgb','rgba').replace(')',`,${t*(0.6+glow*0.4)})`);
+    ctx.lineWidth=3+t*(8+glow*14); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function startCountdown() {
+  overlay.classList.add('hidden');
+  countdownEl.style.display='block';
+  let count=3;
+  countdownEl.textContent=count;
+  drawPreview(); // show bots during countdown
+  const iv=setInterval(()=>{
+    count--;
+    if (count>0) { countdownEl.textContent=count; drawPreview(); }
+    else { clearInterval(iv); countdownEl.style.display='none'; beginGame(); }
+  },1000);
+}
+
+function beginGame() {
+  gameRunning=true; startTime=performance.now(); maxSpeed=MIN_SPEED;
+  if (animId) cancelAnimationFrame(animId);
+  lastTime=null; animId=requestAnimationFrame(loop);
+}
+
+function endGame(reason) {
+  gameRunning=false;
+  initLevel();
+  overlay.classList.remove('hidden');
+  const win=reason.startsWith('🏆');
+  overlay.innerHTML=`
+    <h1 style="color:${win?'#2ecc71':'#e74c3c'}">${win?'Sieg!':'Game Over'}</h1>
+    <p>${reason}</p>
+    <p>Höchstgeschwindigkeit: <strong>${Math.round(maxSpeed)}</strong></p>
+    <p>Zeit: <strong>${((performance.now()-startTime)/1000).toFixed(1)}</strong>s</p>
+    <button id="startBtn">Nochmal</button>
+  `;
+  drawPreview();
+  document.getElementById('startBtn').addEventListener('click', startCountdown);
+}
+
+function loop(ts) {
+  if (!gameRunning) return;
+  if (!lastTime) lastTime=ts;
+  const dt=Math.min((ts-lastTime)/1000,0.05); lastTime=ts;
+  const W=canvas.width, H=canvas.height;
+  const turning=keys.ArrowLeft||keys.ArrowRight;
+
+  if (turning) player.speed=Math.max(MIN_SPEED,player.speed*Math.exp(-DECEL_FACTOR*dt));
+  else         player.speed=Math.min(MAX_SPEED,player.speed*Math.exp(ACCEL_FACTOR*dt));
+  if (player.speed>maxSpeed) maxSpeed=player.speed;
+
+  const ptr=TURN_RATE/(1+Math.pow(player.speed/300,2)*8);
+  if (keys.ArrowLeft)  player.angle-=ptr*dt;
+  if (keys.ArrowRight) player.angle+=ptr*dt;
+
+  player.x+=Math.cos(player.angle)*player.speed*dt;
+  player.y+=Math.sin(player.angle)*player.speed*dt;
+  player.trail.push({x:player.x,y:player.y});
+  if (player.trail.length>400) player.trail.shift();
+
+  if (player.x<PRADIUS||player.x>W-PRADIUS||player.y<PRADIUS||player.y>H-PRADIUS){endGame('Rand berührt!');return;}
+  for (const o of obstacles) if (circleRect(player.x,player.y,PRADIUS,o.x,o.y,o.w,o.h)){endGame('Hindernis getroffen!');return;}
+
+  for (const bot of bots) updateBot(bot,dt,W,H);
+
+  for (const bot of bots) {
+    if (bot.dead) continue;
+    const dx=player.x-bot.x, dy=player.y-bot.y;
+    if (dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)) {
+      if (player.speed>=bot.speed){bot.dead=true;}
+      else{endGame('Bot getroffen! (zu langsam)');return;}
+      player.speed=Math.max(MIN_SPEED,player.speed/2);
+    }
+  }
+
+  for (let i=0;i<bots.length;i++) {
+    if (bots[i].dead) continue;
+    for (let j=i+1;j<bots.length;j++) {
+      if (bots[j].dead) continue;
+      const dx=bots[i].x-bots[j].x, dy=bots[i].y-bots[j].y;
+      if (dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)) {
+        if (bots[i].speed>=bots[j].speed) bots[j].dead=true; else bots[i].dead=true;
+      }
+    }
+  }
+
+  if (bots.every(b=>b.dead)){endGame('🏆 Sieg! Alle Bots eliminiert!');return;}
+
+  drawScene();
+
+  drawTrail(player.trail, player.speed, 'rgb(231,76,60)');
+
+  for (const bot of bots) {
+    if (bot.dead) continue;
+    drawTrail(bot.trail, bot.speed, hexToRgb(bot.color));
+    ctx.beginPath(); ctx.arc(bot.x,bot.y,PRADIUS,0,Math.PI*2); ctx.fillStyle=bot.color; ctx.fill();
+  }
+
+  ctx.beginPath(); ctx.arc(player.x,player.y,PRADIUS,0,Math.PI*2); ctx.fillStyle='#e74c3c'; ctx.fill();
+
+  spdEl.textContent=Math.round(player.speed);
+  maxSpdEl.textContent=Math.round(maxSpeed);
+  timeEl.textContent=((ts-startTime)/1000).toFixed(1);
+
+  animId=requestAnimationFrame(loop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startCountdown);
+</script>
+</body>
+</html>
