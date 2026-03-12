@@ -8,7 +8,7 @@
     body { background: #111; overflow: hidden; font-family: monospace; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     #hud { position: absolute; top: 16px; left: 16px; z-index: 2; color: #fff; font-size: 14px; line-height: 1.8; pointer-events: none; }
-    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 160px); z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); color: white; }
+    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 220px); z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); color: white; }
     .overlay.hidden { display: none; }
     .overlay h1 { font-size: 2.5rem; margin-bottom: 1rem; }
     .overlay p { font-size: 1rem; color: #aaa; margin-bottom: 0.4rem; }
@@ -21,8 +21,8 @@
     #spectate  { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 1.4rem; color: #aaa; pointer-events: none; z-index: 3; display: none; background: rgba(0,0,0,0.5); padding: 0.5rem 1.5rem; border-radius: 6px; }
     #error-msg { color: #e74c3c; margin-top: 0.5rem; font-size: 0.9rem; min-height: 1.2rem; }
     .divider { width: 220px; border: none; border-top: 1px solid #444; margin: 0.6rem 0 0; }
-    #mobile-controls { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 160px; z-index: 10; background: #111; border-top: 2px solid #333; pointer-events: none; }
-    .mobile-btn { position: absolute; width: 120px; height: 120px; top: 50%; transform: translateY(-50%); border-radius: 50%; background: rgba(255,255,255,0.12); border: 3px solid rgba(255,255,255,0.4); color: white; font-size: 3.5rem; display: flex; align-items: center; justify-content: center; pointer-events: all; user-select: none; -webkit-user-select: none; touch-action: none; }
+    #mobile-controls { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 220px; z-index: 10; background: #111; border-top: 2px solid #333; pointer-events: none; }
+    .mobile-btn { position: absolute; width: 160px; height: 160px; top: 50%; transform: translateY(-50%); border-radius: 50%; background: rgba(255,255,255,0.12); border: 3px solid rgba(255,255,255,0.4); color: white; font-size: 5rem; display: flex; align-items: center; justify-content: center; pointer-events: all; user-select: none; -webkit-user-select: none; touch-action: none; }
     .mobile-btn:active { background: rgba(255,255,255,0.35); }
     #btn-left  { left: 30px; }
     #btn-right { right: 30px; }
@@ -32,9 +32,6 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud" class="hidden">
-  <div>Geschwindigkeit: <span id="spd">0</span></div>
-  <div>Hoechstgeschwindigkeit: <span id="maxspd">0</span></div>
-  <div>Zeit: <span id="time">0.0</span>s</div>
   <div id="hud-active"></div>
 </div>
 <div id="screen-menu" class="overlay">
@@ -74,7 +71,7 @@ const errEl=document.getElementById('error-msg'),qcEl=document.getElementById('q
 const waitTitleEl=document.getElementById('wait-title');
 const SCREENS={menu:document.getElementById('screen-menu'),wait:document.getElementById('screen-wait'),result:document.getElementById('screen-result')};
 function showScreen(n){for(const[k,el]of Object.entries(SCREENS))el.classList.toggle('hidden',k!==n);}
-function getMobileOffset(){return window.matchMedia('(pointer: coarse), (max-width: 768px)').matches?160:0;}
+function getMobileOffset(){return window.matchMedia('(pointer: coarse), (max-width: 768px)').matches?220:0;}
 function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight-getMobileOffset();}
 resize();window.addEventListener('resize',()=>{resize();if(phase==='sp-preview')spDrawPreview();});
 
