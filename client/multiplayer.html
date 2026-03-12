@@ -338,21 +338,10 @@ function mpHandle(msg){
   }
   else if(msg.type==='game_state'){
     mpLastServerState=msg;
-    // Eigenen Punkt sanft mit Server synchronisieren (Korrektur bei Abweichung)
+    // Tod vom Server übernehmen
     if(mpLocal&&myId){
       const me=msg.players.find(p=>p.id===myId);
-      if(me&&me.alive){
-        const dx=me.x-mpLocal.x,dy=me.y-mpLocal.y;
-        const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist>60){
-          // Große Abweichung: hart korrigieren
-          mpLocal.x=me.x;mpLocal.y=me.y;mpLocal.angle=me.angle;mpLocal.speed=me.speed;
-        } else if(dist>5){
-          // Kleine Abweichung: sanft angleichen
-          mpLocal.x+=dx*0.2;mpLocal.y+=dy*0.2;
-        }
-        if(!me.alive)mpLocal.alive=false;
-      }
+      if(me&&!me.alive)mpLocal.alive=false;
     }
     if(phase==='mp-spectate')mpDrawFrame(msg);
   }
