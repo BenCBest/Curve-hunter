@@ -7,6 +7,7 @@ const MIN_SPEED    = 100;
 const MAX_SPEED    = 3000;
 const PRADIUS      = 14;
 const MAX_TRAIL    = 300;
+const MAP_BORDER   = 30; // Breite des grauen Randes (Bande) – muss mit Client übereinstimmen
 
 /**
  * Einen Spieler einen Tick vorwärts simulieren.
@@ -58,8 +59,9 @@ function checkCollisions(players, obstacles) {
   // Spieler-Hindernis
   for (const p of players) {
     if (!p.alive) continue;
-    if (p.x < PRADIUS || p.x > p._mapWidth - PRADIUS ||
-        p.y < PRADIUS || p.y > p._mapHeight - PRADIUS) {
+    const wall = MAP_BORDER + PRADIUS;
+    if (p.x < wall || p.x > p._mapWidth - wall ||
+        p.y < wall || p.y > p._mapHeight - wall) {
       p.alive = false;
       continue;
     }
@@ -101,12 +103,13 @@ function checkCollisions(players, obstacles) {
 function randomObstacles(width, height) {
   const obs = [];
   const GAP = 20;
+  const edge = MAP_BORDER + 30; // Hindernisse nicht direkt an der Bande
   for (let i = 0; i < 15; i++) {
     for (let attempt = 0; attempt < 100; attempt++) {
       const w = 20 + Math.random() * 220;
       const h = 15 + Math.random() * 160;
-      const x = 60 + Math.random() * (width - w - 120);
-      const y = 60 + Math.random() * (height - h - 120);
+      const x = edge + Math.random() * (width - w - edge * 2);
+      const y = edge + Math.random() * (height - h - edge * 2);
       let overlap = false;
       for (const o of obs) {
         if (x < o.x + o.w + GAP && x + w > o.x - GAP &&
@@ -126,7 +129,7 @@ function randomObstacles(width, height) {
  */
 function safeStartPositions(count, obstacles, width, height) {
   const positions = [];
-  const margin = PRADIUS + 40;
+  const margin = MAP_BORDER + PRADIUS + 40;
   const CLEAR_DIST = 200; // Mindestfreiraum in Startrichtung
   const CLEAR_STEPS = 10;
 
@@ -175,6 +178,6 @@ function safeStartPositions(count, obstacles, width, height) {
 }
 
 module.exports = {
-  TURN_RATE, ACCEL_FACTOR, DECEL_FACTOR, MIN_SPEED, MAX_SPEED, PRADIUS,
+  TURN_RATE, ACCEL_FACTOR, DECEL_FACTOR, MIN_SPEED, MAX_SPEED, PRADIUS, MAP_BORDER,
   tickPlayer, circleRect, checkCollisions, randomObstacles, safeStartPositions
 };
