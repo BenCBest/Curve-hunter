@@ -137,19 +137,43 @@ function randomObstacles(){
   for(let i=0;i<NUM_OBS;i++){for(let a=0;a<100;a++){const w=20+Math.random()*220,h=15+Math.random()*160,x=60+Math.random()*(_mapW-w-120),y=60+Math.random()*(_mapH-h-120);let ok=true;for(const o of obs)if(x<o.x+o.w+GAP&&x+w>o.x-GAP&&y<o.y+o.h+GAP&&y+h>o.y-GAP){ok=false;break;}if(ok){obs.push({x,y,w,h});break;}}}
   return obs;
 }
-function safePos(ex,ey){
+// Prüft ob 200px in Fahrtrichtung frei sind
+function pathClear(x,y,angle,obstacles,mapW,mapH){
+  const m=PRADIUS+40,steps=10,dist=200;
+  for(let s=1;s<=steps;s++){
+    const px=x+Math.cos(angle)*(s/steps)*dist,py=y+Math.sin(angle)*(s/steps)*dist;
+    if(px<m||px>mapW-m||py<m||py>mapH-m)return false;
+    for(const o of obstacles)if(circleRect(px,py,PRADIUS+10,o.x,o.y,o.w,o.h))return false;
+  }
+  return true;
+}
+// Findet eine sichere Position: nicht auf Hindernis, 200px Freiraum vorne
+function findSafeSpawn(obstacles,mapW,mapH,excludeX,excludeY,preferAngle){
   const m=PRADIUS+40;
-  for(let i=0;i<100;i++){const x=m+Math.random()*(_mapW-m*2),y=m+Math.random()*(_mapH-m*2),dx=x-ex,dy=y-ey;if(dx*dx+dy*dy<80*80)continue;let ok=true;for(const o of spObstacles)if(circleRect(x,y,PRADIUS+20,o.x,o.y,o.w,o.h)){ok=false;break;}if(ok)return{x,y};}
-  return{x:_mapW/2+(Math.random()-0.5)*200,y:_mapH/3};
+  for(let i=0;i<300;i++){
+    const x=m+Math.random()*(mapW-m*2),y=m+Math.random()*(mapH-m*2);
+    if(excludeX!==null){const dx=x-excludeX,dy=y-excludeY;if(dx*dx+dy*dy<80*80)continue;}
+    let onObstacle=false;
+    for(const o of obstacles)if(circleRect(x,y,PRADIUS+20,o.x,o.y,o.w,o.h)){onObstacle=true;break;}
+    if(onObstacle)continue;
+    const base=preferAngle??Math.random()*Math.PI*2;
+    for(let a=0;a<8;a++){
+      const angle=base+(a/8)*Math.PI*2;
+      if(pathClear(x,y,angle,obstacles,mapW,mapH))return{x,y,angle};
+    }
+  }
+  return{x:mapW/2,y:mapH/3,angle:-Math.PI/2};
 }
 function spInit(){
   _mapW=canvas.width;_mapH=canvas.height;
   spObstacles=randomObstacles();
-  let px=_mapW/2,py=_mapH*0.75;
-  for(const o of spObstacles)if(circleRect(px,py,PRADIUS+20,o.x,o.y,o.w,o.h)){py-=100;break;}
-  spPlayer={x:px,y:py,angle:-Math.PI/2,speed:MIN_SPD,trail:[]};
+  const sp=findSafeSpawn(spObstacles,_mapW,_mapH,null,null,-Math.PI/2);
+  spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[]};
   spMaxSpeed=MIN_SPD;
-  spBots=Array.from({length:NUM_BOTS},()=>{const p=safePos(px,py);return{x:p.x,y:p.y,angle:Math.random()*Math.PI*2,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};});
+  spBots=Array.from({length:NUM_BOTS},()=>{
+    const p=findSafeSpawn(spObstacles,_mapW,_mapH,sp.x,sp.y,null);
+    return{x:p.x,y:p.y,angle:p.angle,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};
+  });
 }
 function spDrawPreview(){
   drawBg(spObstacles);

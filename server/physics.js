@@ -101,7 +101,7 @@ function checkCollisions(players, obstacles) {
 function randomObstacles(width, height) {
   const obs = [];
   const GAP = 20;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 15; i++) {
     for (let attempt = 0; attempt < 100; attempt++) {
       const w = 20 + Math.random() * 220;
       const h = 15 + Math.random() * 160;
