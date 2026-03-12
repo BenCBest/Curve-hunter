@@ -356,16 +356,6 @@ function mpRender(msg){
     localMe.alive=false;
     if(phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}
   }
-  // Server-Position sanft korrigieren (nur wenn große Abweichung)
-  if(serverMe&&serverMe.alive&&localMe&&localMe.alive){
-    const dx=serverMe.x-localMe.x,dy=serverMe.y-localMe.y;
-    if(dx*dx+dy*dy>60*60){
-      localMe.x+=(serverMe.x-localMe.x)*0.3;
-      localMe.y+=(serverMe.y-localMe.y)*0.3;
-      localMe.angle+=(serverMe.angle-localMe.angle)*0.3;
-      localMe.speed+=(serverMe.speed-localMe.speed)*0.3;
-    }
-  }
 
   drawBg(mpData.obstacles);
   // Gegner zeichnen (vom Server)
