@@ -39,9 +39,13 @@ class Matchmaking {
   }
 }
 
+const { queue5, queue2, queue5mobile, queue2mobile } = require('./matchmaking');
+
 module.exports = {
   queue5: new Matchmaking(5),
   queue2: new Matchmaking(2),
+  queue2clean: new Matchmaking(2),
   queue5mobile: new Matchmaking(5),
   queue2mobile: new Matchmaking(2),
+  queue2cleanMobile: new Matchmaking(2),
 };

@@ -1,6 +1,6 @@
 // Spielraum-Modul
 const { v4: uuidv4 } = require('uuid');
-const { checkCollisions, randomObstacles, safeStartPositions, MIN_SPEED, PRADIUS } = require('./physics');
+const { checkCollisions, randomObstacles, safeStartPositions, MIN_SPEED, PRADIUS, MAP_BORDER } = require('./physics');
 
 const PLAYER_COLORS = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 const MAP_WIDTH_LANDSCAPE  = 1920;
@@ -9,18 +9,19 @@ const MAP_WIDTH_PORTRAIT   = 1080;
 const MAP_HEIGHT_PORTRAIT  = 1920;
 
 class Room {
-  constructor(players, portrait = false) {
+  constructor(players, portrait = false, noObstacles = false) {
     const MAP_WIDTH  = portrait ? MAP_WIDTH_PORTRAIT  : MAP_WIDTH_LANDSCAPE;
     const MAP_HEIGHT = portrait ? MAP_HEIGHT_PORTRAIT : MAP_HEIGHT_LANDSCAPE;
     this.roomId   = uuidv4();
     this.portrait = portrait;
+    this.noObstacles = noObstacles;
     this.status   = 'waiting'; // waiting → countdown → active → finished
     this.tick     = 0;
     this.startedAt = null;
     this._interval = null;
     this._lastTick = null;
 
-    this.obstacles = randomObstacles(MAP_WIDTH, MAP_HEIGHT, portrait ? 15 : 15);
+    this.obstacles = noObstacles ? [] : randomObstacles(MAP_WIDTH, MAP_HEIGHT, 15);
     const startPos = safeStartPositions(players.length, this.obstacles, MAP_WIDTH, MAP_HEIGHT);
 
     this.players = new Map();
@@ -160,6 +161,16 @@ class Room {
     const p = this.players.get(playerId);
     if (!p) return;
     
+    // Check for wrap-around in clean mode
+    let wrapped = false;
+    if (this.noObstacles) {
+      const MAP_WIDTH = this.portrait ? MAP_WIDTH_PORTRAIT : MAP_WIDTH_LANDSCAPE;
+      const MAP_HEIGHT = this.portrait ? MAP_HEIGHT_PORTRAIT : MAP_HEIGHT_LANDSCAPE;
+      
+      if (Math.abs(state.x - p.x) > MAP_WIDTH / 2) wrapped = true;
+      if (Math.abs(state.y - p.y) > MAP_HEIGHT / 2) wrapped = true;
+    }
+    
     // Update player state from client
     p.x = state.x;
     p.y = state.y;
@@ -169,9 +180,14 @@ class Room {
     
     if (p.speed > p.maxSpeed) p.maxSpeed = p.speed;
     
-    // Update trail
-    p.trail.push({ x: p.x, y: p.y });
-    if (p.trail.length > 300) p.trail.shift();
+    // Update trail (clear if wrapped, limit to speed 300 length)
+    const maxTrailLen = Math.floor(8 + 300 / 3);
+    if (wrapped) {
+      p.trail = [];
+    } else {
+      p.trail.push({ x: p.x, y: p.y });
+      if (p.trail.length > maxTrailLen) p.trail.shift();
+    }
     
     // Debug log
     if (this.tick % 60 === 0) {

@@ -49,6 +49,7 @@
   <button id="btn-single" class="btn-sp">Einzelspieler (vs Bots)</button>
   <hr class="divider">
   <button id="btn-1v1"  class="btn-1v1">Online: 1v1</button>
+  <button id="btn-1v1-clean"  class="btn-1v1">Online: 1v1 (ohne Hindernisse)</button>
   <button id="btn-find" class="btn-5p">Online: 5 Spieler</button>
   <p id="error-msg"></p>
 </div>
@@ -163,7 +164,7 @@ function drawBg(obs){
 
 function drawTrail(trail,speed,color){
   if(!trail||trail.length<2)return;
-  const tailLen=Math.min(trail.length,Math.floor(8+speed/3)),start=trail.length-tailLen;
+  const tailLen=Math.min(trail.length,Math.floor(8+Math.min(speed,300)/3)),start=trail.length-tailLen;
   const glow=Math.min(1,Math.max(0,(speed-200)/600));
   ctx.save();
   if(glow>0){ctx.shadowColor=color.replace('rgb','rgba').replace(')',',1)');ctx.shadowBlur=10+glow*60;for(let i=start+1;i<trail.length;i++){const t=(i-start)/tailLen,a=trail[i-1],b=trail[i];ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=color.replace('rgb','rgba').replace(')',','+t*glow*0.7+')');ctx.lineWidth=6+t*(14+glow*35);ctx.stroke();}}
@@ -270,7 +271,9 @@ function spLoop(ts){
   if(keys.ArrowRight)spPlayer.angle+=ptr*dt;
   spPlayer.x+=Math.cos(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.y+=Math.sin(spPlayer.angle)*spPlayer.speed*dt;
-  spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});if(spPlayer.trail.length>400)spPlayer.trail.shift();
+  spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});
+  const maxTrailLen=Math.floor(8+300/3);
+  if(spPlayer.trail.length>maxTrailLen)spPlayer.trail.shift();
   
   if(spPlayer.alive){
     const wall=BORDER+PRADIUS;
@@ -355,10 +358,25 @@ function mpTickLocal(dt){
   mpLocal.x+=Math.cos(mpLocal.angle)*mpLocal.speed*dt;
   mpLocal.y+=Math.sin(mpLocal.angle)*mpLocal.speed*dt;
   mpLocal.trail.push({x:mpLocal.x,y:mpLocal.y});
-  if(mpLocal.trail.length>400)mpLocal.trail.shift();
+  const maxTrailLen=Math.floor(8+300/3);
+  if(mpLocal.trail.length>maxTrailLen)mpLocal.trail.shift();
   
   // Clientseitige Kollisionsprüfung
   if(!mpData)return;
+  
+  // Wrap-around für "clean" Modus (keine Hindernisse)
+  if(mpData.obstacles.length===0){
+    const wall=BORDER+PRADIUS;
+    let wrapped=false;
+    if(mpLocal.x<wall){mpLocal.x=mpData.mapWidth-wall;wrapped=true;}
+    if(mpLocal.x>mpData.mapWidth-wall){mpLocal.x=wall;wrapped=true;}
+    if(mpLocal.y<wall){mpLocal.y=mpData.mapHeight-wall;wrapped=true;}
+    if(mpLocal.y>mpData.mapHeight-wall){mpLocal.y=wall;wrapped=true;}
+    if(wrapped)mpLocal.trail=[];
+    return;
+  }
+  
+  // Normale Kollisionsprüfung für Modi mit Hindernissen
   const wall=BORDER+PRADIUS;
   if(mpLocal.x<wall||mpLocal.x>mpData.mapWidth-wall||mpLocal.y<wall||mpLocal.y>mpData.mapHeight-wall){
     console.log('[CLIENT DEATH] Rand! x:'+Math.round(mpLocal.x)+' y:'+Math.round(mpLocal.y)+' mapW:'+mpData.mapWidth+' mapH:'+mpData.mapHeight);
@@ -399,7 +417,7 @@ let mpLastServerState=null;
 function connect(mode){
   mpMode=mode;errEl.textContent='';
   try{ws=new WebSocket(getUrl());}catch(e){errEl.textContent='Verbindung fehlgeschlagen.';return;}
-  ws.onopen=()=>{ws.send(JSON.stringify({type:'join_queue',mode:mode==='1v1'?'1v1':'5p',platform:isMobile()?'mobile':'desktop'}));waitTitleEl.textContent=mode==='1v1'?'Suche Gegner...':'Suche Spieler...';qcEl.textContent='0 / '+(mode==='1v1'?'2':'5')+' Spieler';showScreen('wait');phase='mp-wait';};
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'join_queue',mode:mode,platform:isMobile()?'mobile':'desktop'}));waitTitleEl.textContent=mode==='1v1'||mode==='1v1-clean'?'Suche Gegner...':'Suche Spieler...';qcEl.textContent='0 / '+(mode==='1v1'||mode==='1v1-clean'?'2':'5')+' Spieler';showScreen('wait');phase='mp-wait';};
   ws.onerror=()=>{errEl.textContent='Verbindung fehlgeschlagen.';showScreen('menu');phase='menu';ws=null;};
   ws.onclose=()=>{if(phase!=='menu'&&phase!=='result'){errEl.textContent='Verbindung getrennt.';showScreen('menu');phase='menu';}ws=null;};
   ws.onmessage=e=>{try{mpHandle(JSON.parse(e.data));}catch(_){}};
@@ -490,9 +508,9 @@ function mpEnd(msg){
   else if(!msg.winnerId){tEl.style.color='#f39c12';tEl.textContent='Unentschieden';sEl.textContent='Alle gleichzeitig ausgeschieden.';}
   else{tEl.style.color='#e74c3c';tEl.textContent='Niederlage';sEl.textContent='Ein anderer Spieler hat gewonnen.';}
   sEl.textContent+=' | Zeit: '+(msg.elapsedMs/1000).toFixed(1)+'s';
-  spLastMode=mpMode==='1v1'?'1v1':'multi';
+  spLastMode=mpMode==='1v1'||mpMode==='1v1-clean'?'1v1':'multi';
   const btnAgain=document.getElementById('btn-again');
-  if(mpMode==='1v1'){btnAgain.textContent='Nochmal (1v1)';btnAgain.className='btn-1v1';}
+  if(mpMode==='1v1'||mpMode==='1v1-clean'){btnAgain.textContent='Nochmal (1v1)';btnAgain.className='btn-1v1';}
   else{btnAgain.textContent='Nochmal (5 Spieler)';btnAgain.className='btn-5p';}
   showScreen('result');
   setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
@@ -501,12 +519,13 @@ function mpEnd(msg){
 
 document.getElementById('btn-single').addEventListener('click',()=>{spInit();spDrawPreview();spStartCountdown();});
 document.getElementById('btn-1v1').addEventListener('click',()=>connect('1v1'));
+document.getElementById('btn-1v1-clean').addEventListener('click',()=>connect('1v1-clean'));
 document.getElementById('btn-find').addEventListener('click',()=>connect('5p'));
 document.getElementById('btn-cancel').addEventListener('click',()=>{if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'leave_queue'}));disconnect();showScreen('menu');phase='menu';});
 document.getElementById('btn-again').addEventListener('click',()=>{
   hudEl.classList.add('hidden');specEl.style.display='none';
   if(spLastMode==='single'){spInit();spDrawPreview();spStartCountdown();}
-  else if(spLastMode==='1v1'){showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'1v1',platform:isMobile()?'mobile':'desktop'}));else connect('1v1');}
+  else if(spLastMode==='1v1'){showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:mpMode,platform:isMobile()?'mobile':'desktop'}));else connect(mpMode);}
   else{showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'5p',platform:isMobile()?'mobile':'desktop'}));else connect('5p');}
 });
 document.getElementById('btn-menu').addEventListener('click',()=>{disconnect();showScreen('menu');phase='menu';hudEl.classList.add('hidden');specEl.style.display='none';setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);applyZoom();spInit();spDrawPreview();});
