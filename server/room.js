@@ -8,8 +8,8 @@ const {
 const PLAYER_COLORS = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 const MAP_WIDTH_LANDSCAPE  = 1920;
 const MAP_HEIGHT_LANDSCAPE = 1080;
-const MAP_WIDTH_PORTRAIT   = 540;
-const MAP_HEIGHT_PORTRAIT  = 960;
+const MAP_WIDTH_PORTRAIT   = 1080;
+const MAP_HEIGHT_PORTRAIT  = 1920;
 
 class Room {
   constructor(players, portrait = false) {
@@ -23,7 +23,7 @@ class Room {
     this._interval = null;
     this._lastTick = null;
 
-    this.obstacles = randomObstacles(MAP_WIDTH, MAP_HEIGHT, portrait ? 8 : 15);
+    this.obstacles = randomObstacles(MAP_WIDTH, MAP_HEIGHT, portrait ? 15 : 15);
     const startPos = safeStartPositions(players.length, this.obstacles, MAP_WIDTH, MAP_HEIGHT);
 
     this.players = new Map();

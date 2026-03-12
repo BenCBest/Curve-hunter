@@ -5,7 +5,7 @@
   <title>Curve Racer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #111; overflow: hidden; font-family: monospace; display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; }
+    body { background: #111; overflow: hidden; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100vw; height: 100vh; padding: 0; }
     #game-container { position: relative; flex-shrink: 0; transform-origin: center center; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     #hud { position: absolute; top: 16px; left: 16px; z-index: 2; color: #fff; font-size: 14px; line-height: 1.8; pointer-events: none; }
@@ -22,11 +22,11 @@
     #spectate  { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 1.4rem; color: #aaa; pointer-events: none; z-index: 3; display: none; background: rgba(0,0,0,0.5); padding: 0.5rem 1.5rem; border-radius: 6px; }
     #error-msg { color: #e74c3c; margin-top: 0.5rem; font-size: 0.9rem; min-height: 1.2rem; }
     .divider { width: 220px; border: none; border-top: 1px solid #444; margin: 0.6rem 0 0; }
-    #mobile-controls { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 220px; z-index: 10; pointer-events: none; }
-    .mobile-btn { position: absolute; top: 0; height: 100%; width: 50%; background: #aaa; display: flex; align-items: center; justify-content: center; pointer-events: all; user-select: none; -webkit-user-select: none; touch-action: none; font-size: 4rem; color: #555; }
-    .mobile-btn:active { background: #666; color: #333; }
-    #btn-left  { left: 0; border-right: 2px solid #888; }
-    #btn-right { right: 0; }
+    #mobile-controls { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 180px; z-index: 10; pointer-events: none; background: #000; }
+    .mobile-btn { position: absolute; top: 0; height: 100%; width: 50%; background: #333; display: flex; align-items: center; justify-content: center; pointer-events: all; user-select: none; -webkit-user-select: none; touch-action: none; font-size: 3.5rem; color: #888; border-top: 3px solid #555; }
+    .mobile-btn:active { background: #555; color: #aaa; }
+    #btn-left  { left: 0; border-right: 2px solid #555; }
+    #btn-right { right: 0; border-left: 2px solid #555; }
     @media (pointer: coarse), (max-width: 768px) {
       #mobile-controls { display: block; }
       .overlay h1 { font-size: 3.5rem; }
@@ -80,7 +80,7 @@ const SCREENS={menu:document.getElementById('screen-menu'),wait:document.getElem
 function showScreen(n){for(const[k,el]of Object.entries(SCREENS))el.classList.toggle('hidden',k!==n);}
 
 const GAME_W_LANDSCAPE=1920,GAME_H_LANDSCAPE=1080;
-const GAME_W_PORTRAIT=540,GAME_H_PORTRAIT=960;
+const GAME_W_PORTRAIT=1080,GAME_H_PORTRAIT=1920;
 const BORDER=30;
 
 function isMobile(){return window.matchMedia('(pointer: coarse)').matches||window.innerWidth<=768;}
@@ -98,9 +98,19 @@ function setCanvasSize(w,h){
 
 function applyZoom(){
   const container=document.getElementById('game-container');
-  const availH=window.innerHeight-getMobileOffset();
+  const mobileControls=document.getElementById('mobile-controls');
+  const controlsHeight=isMobile()&&mobileControls?mobileControls.offsetHeight:0;
+  const availH=window.innerHeight-controlsHeight;
   const scale=Math.min(window.innerWidth/GAME_W,availH/GAME_H);
   container.style.transform='scale('+scale+')';
+  // Container nach oben schieben, damit Buttons direkt darunter sind
+  if(isMobile()&&controlsHeight>0){
+    const scaledHeight=GAME_H*scale;
+    const topOffset=(availH-scaledHeight)/2;
+    container.style.marginTop=topOffset+'px';
+  }else{
+    container.style.marginTop='0';
+  }
 }
 
 setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
@@ -116,7 +126,7 @@ window.addEventListener('resize',()=>{
 const TURN_RATE=4.5,ACCEL=Math.LN2/8,DECEL=Math.LN2/5,MIN_SPD=100,MAX_SPD=3000,PRADIUS=14;
 const BOT_COLORS=['#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22'];
 const NUM_BOTS=15;
-function getNumObs(){return isPortrait()?8:isMobile()?12:15;}
+function getNumObs(){return 15;}
 
 let phase='menu';
 let animId=null,lastTime=null,spStartTime=null,spMaxSpeed=MIN_SPD;
