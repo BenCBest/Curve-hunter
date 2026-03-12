@@ -6,19 +6,24 @@ const {
 } = require('./physics');
 
 const PLAYER_COLORS = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
-const MAP_WIDTH  = 1920;
-const MAP_HEIGHT = 1080;
+const MAP_WIDTH_LANDSCAPE  = 1920;
+const MAP_HEIGHT_LANDSCAPE = 1080;
+const MAP_WIDTH_PORTRAIT   = 540;
+const MAP_HEIGHT_PORTRAIT  = 960;
 
 class Room {
-  constructor(players) {
+  constructor(players, portrait = false) {
+    const MAP_WIDTH  = portrait ? MAP_WIDTH_PORTRAIT  : MAP_WIDTH_LANDSCAPE;
+    const MAP_HEIGHT = portrait ? MAP_HEIGHT_PORTRAIT : MAP_HEIGHT_LANDSCAPE;
     this.roomId   = uuidv4();
+    this.portrait = portrait;
     this.status   = 'waiting'; // waiting → countdown → active → finished
     this.tick     = 0;
     this.startedAt = null;
     this._interval = null;
     this._lastTick = null;
 
-    this.obstacles = randomObstacles(MAP_WIDTH, MAP_HEIGHT);
+    this.obstacles = randomObstacles(MAP_WIDTH, MAP_HEIGHT, portrait ? 8 : 15);
     const startPos = safeStartPositions(players.length, this.obstacles, MAP_WIDTH, MAP_HEIGHT);
 
     this.players = new Map();

@@ -91,9 +91,9 @@ wss.on('connection', (ws) => {
   ws.on('error', (err) => console.error(`[WS ${playerId}]`, err.message));
 });
 
-function createRoom(players) {
+function createRoom(players, portrait = false) {
   try {
-    const room = new Room(players);
+    const room = new Room(players, portrait);
     rooms.set(room.roomId, room);
     for (const { playerId: pid } of players) playerRoom.set(pid, room);
     room.start();
@@ -105,10 +105,10 @@ function createRoom(players) {
   }
 }
 
-queue5.onRoomReady(createRoom);
-queue2.onRoomReady(createRoom);
-queue5mobile.onRoomReady(createRoom);
-queue2mobile.onRoomReady(createRoom);
+queue5.onRoomReady(players => createRoom(players, false));
+queue2.onRoomReady(players => createRoom(players, false));
+queue5mobile.onRoomReady(players => createRoom(players, true));
+queue2mobile.onRoomReady(players => createRoom(players, true));
 
 server.listen(PORT, () => console.log(`Curve Racer Server läuft auf Port ${PORT}`));
 

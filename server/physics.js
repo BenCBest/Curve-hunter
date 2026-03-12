@@ -98,13 +98,13 @@ function checkCollisions(players, obstacles) {
 }
 
 /**
- * 20 zufällige, nicht überlappende Hindernisse generieren.
+ * 15 (landscape) oder 8 (portrait) zufällige, nicht überlappende Hindernisse generieren.
  */
-function randomObstacles(width, height) {
+function randomObstacles(width, height, count = 15) {
   const obs = [];
   const GAP = 20;
-  const edge = MAP_BORDER + 30; // Hindernisse nicht direkt an der Bande
-  for (let i = 0; i < 15; i++) {
+  const edge = MAP_BORDER + 30;
+  for (let i = 0; i < count; i++) {
     for (let attempt = 0; attempt < 100; attempt++) {
       const w = 20 + Math.random() * 220;
       const h = 15 + Math.random() * 160;

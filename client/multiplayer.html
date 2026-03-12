@@ -6,7 +6,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #111; overflow: hidden; font-family: monospace; display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; }
-    #game-container { position: relative; width: 1920px; height: 1080px; flex-shrink: 0; transform-origin: center center; }
+    #game-container { position: relative; flex-shrink: 0; transform-origin: center center; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     #hud { position: absolute; top: 16px; left: 16px; z-index: 2; color: #fff; font-size: 14px; line-height: 1.8; pointer-events: none; }
     .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); color: white; }
@@ -79,25 +79,44 @@ const waitTitleEl=document.getElementById('wait-title');
 const SCREENS={menu:document.getElementById('screen-menu'),wait:document.getElementById('screen-wait'),result:document.getElementById('screen-result')};
 function showScreen(n){for(const[k,el]of Object.entries(SCREENS))el.classList.toggle('hidden',k!==n);}
 
-const GAME_W=1920,GAME_H=1080,BORDER=30;
-canvas.width=GAME_W;canvas.height=GAME_H;
+const GAME_W_LANDSCAPE=1920,GAME_H_LANDSCAPE=1080;
+const GAME_W_PORTRAIT=540,GAME_H_PORTRAIT=960;
+const BORDER=30;
 
 function isMobile(){return window.matchMedia('(pointer: coarse)').matches||window.innerWidth<=768;}
+function isPortrait(){return window.innerHeight>window.innerWidth;}
 function getMobileOffset(){return isMobile()?220:0;}
+
+let GAME_W=GAME_W_LANDSCAPE,GAME_H=GAME_H_LANDSCAPE;
+
+function setCanvasSize(w,h){
+  GAME_W=w;GAME_H=h;
+  canvas.width=w;canvas.height=h;
+  const container=document.getElementById('game-container');
+  container.style.width=w+'px';container.style.height=h+'px';
+}
 
 function applyZoom(){
   const container=document.getElementById('game-container');
-  const scale=Math.min(window.innerWidth/GAME_W,(window.innerHeight-getMobileOffset())/GAME_H);
+  const availH=window.innerHeight-getMobileOffset();
+  const scale=Math.min(window.innerWidth/GAME_W,availH/GAME_H);
   container.style.transform='scale('+scale+')';
 }
-applyZoom();window.addEventListener('resize',applyZoom);
+
+setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
+applyZoom();
+window.addEventListener('resize',()=>{
+  if(phase==='menu'||phase==='result'){
+    setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
+    if(spObstacles.length)spDrawPreview();
+  }
+  applyZoom();
+});
 
 const TURN_RATE=4.5,ACCEL=Math.LN2/8,DECEL=Math.LN2/5,MIN_SPD=100,MAX_SPD=3000,PRADIUS=14;
 const BOT_COLORS=['#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22'];
 const NUM_BOTS=15;
-function getNumObs(){return isMobile()?12:15;}
-
-const _mapW=GAME_W,_mapH=GAME_H;
+function getNumObs(){return isPortrait()?8:isMobile()?12:15;}
 
 let phase='menu';
 let animId=null,lastTime=null,spStartTime=null,spMaxSpeed=MIN_SPD;
@@ -157,13 +176,13 @@ function angleDiff(t,c){let d=t-c;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)
 function raycastCurved(ox,oy,angle,speed,turnDir,maxDist){
   const steps=60,stepSize=maxDist/steps,tr=turnDir!==0?TURN_RATE/(1+Math.pow(speed/300,2)*8):0;
   let cx=ox,cy=oy,ca=angle;const m=BORDER+PRADIUS+14;
-  for(let i=1;i<=steps;i++){ca+=tr*turnDir*(stepSize/Math.max(speed,1));cx+=Math.cos(ca)*stepSize;cy+=Math.sin(ca)*stepSize;if(cx<m||cx>_mapW-m||cy<m||cy>_mapH-m)return stepSize*i;for(const o of spObstacles)if(circleRect(cx,cy,PRADIUS+14,o.x,o.y,o.w,o.h))return stepSize*i;}
+  for(let i=1;i<=steps;i++){ca+=tr*turnDir*(stepSize/Math.max(speed,1));cx+=Math.cos(ca)*stepSize;cy+=Math.sin(ca)*stepSize;if(cx<m||cx>GAME_W-m||cy<m||cy>GAME_H-m)return stepSize*i;for(const o of spObstacles)if(circleRect(cx,cy,PRADIUS+14,o.x,o.y,o.w,o.h))return stepSize*i;}
   return maxDist;
 }
 
 function randomObstacles(){
   const obs=[],GAP=20,edge=BORDER+30;
-  for(let i=0;i<getNumObs();i++){for(let a=0;a<100;a++){const w=20+Math.random()*220,h=15+Math.random()*160,x=edge+Math.random()*(_mapW-w-edge*2),y=edge+Math.random()*(_mapH-h-edge*2);let ok=true;for(const o of obs)if(x<o.x+o.w+GAP&&x+w>o.x-GAP&&y<o.y+o.h+GAP&&y+h>o.y-GAP){ok=false;break;}if(ok){obs.push({x,y,w,h});break;}}}
+  for(let i=0;i<getNumObs();i++){for(let a=0;a<100;a++){const w=20+Math.random()*220,h=15+Math.random()*160,x=edge+Math.random()*(GAME_W-w-edge*2),y=edge+Math.random()*(GAME_H-h-edge*2);let ok=true;for(const o of obs)if(x<o.x+o.w+GAP&&x+w>o.x-GAP&&y<o.y+o.h+GAP&&y+h>o.y-GAP){ok=false;break;}if(ok){obs.push({x,y,w,h});break;}}}
   return obs;
 }
 
@@ -180,10 +199,10 @@ function findSafeSpawn(obstacles,mapW,mapH,excludeX,excludeY,preferAngle){
 }
 function spInit(){
   spObstacles=randomObstacles();
-  const sp=findSafeSpawn(spObstacles,_mapW,_mapH,null,null,-Math.PI/2);
+  const sp=findSafeSpawn(spObstacles,GAME_W,GAME_H,null,null,-Math.PI/2);
   spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[]};
   spMaxSpeed=MIN_SPD;
-  spBots=Array.from({length:NUM_BOTS},()=>{const p=findSafeSpawn(spObstacles,_mapW,_mapH,sp.x,sp.y,null);return{x:p.x,y:p.y,angle:p.angle,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};});
+  spBots=Array.from({length:NUM_BOTS},()=>{const p=findSafeSpawn(spObstacles,GAME_W,GAME_H,sp.x,sp.y,null);return{x:p.x,y:p.y,angle:p.angle,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};});
 }
 
 function spDrawPreview(){
@@ -210,7 +229,7 @@ function updateBot(bot,dt){
   if(bot.dead)return;
   const wall=BORDER+PRADIUS;
   const emg=wall+60+Math.pow(bot.speed,2)/800;
-  if(bot.x<emg||bot.x>_mapW-emg||bot.y<emg||bot.y>_mapH-emg){const d=angleDiff(Math.atan2(_mapH/2-bot.y,_mapW/2-bot.x),bot.angle);bot.turning=d>0?1:-1;bot.thinkTimer=0;}
+  if(bot.x<emg||bot.x>GAME_W-emg||bot.y<emg||bot.y>GAME_H-emg){const d=angleDiff(Math.atan2(GAME_H/2-bot.y,GAME_W/2-bot.x),bot.angle);bot.turning=d>0?1:-1;bot.thinkTimer=0;}
   else{
     bot.thinkTimer-=dt;
     if(bot.thinkTimer<=0){
@@ -231,7 +250,7 @@ function updateBot(bot,dt){
   bot.x+=Math.cos(bot.angle)*bot.speed*dt;bot.y+=Math.sin(bot.angle)*bot.speed*dt;
   bot.trail.push({x:bot.x,y:bot.y});if(bot.trail.length>300)bot.trail.shift();
   const wall2=BORDER+PRADIUS;
-  if(bot.x<wall2||bot.x>_mapW-wall2||bot.y<wall2||bot.y>_mapH-wall2){spawnExplosion(bot.x,bot.y,bot.color);bot.dead=true;return;}
+  if(bot.x<wall2||bot.x>GAME_W-wall2||bot.y<wall2||bot.y>GAME_H-wall2){spawnExplosion(bot.x,bot.y,bot.color);bot.dead=true;return;}
   for(const o of spObstacles)if(circleRect(bot.x,bot.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(bot.x,bot.y,bot.color);bot.dead=true;return;}
 }
 
@@ -250,7 +269,7 @@ function spLoop(ts){
   spPlayer.y+=Math.sin(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});if(spPlayer.trail.length>400)spPlayer.trail.shift();
   const wall=BORDER+PRADIUS;
-  if(spPlayer.x<wall||spPlayer.x>_mapW-wall||spPlayer.y<wall||spPlayer.y>_mapH-wall){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Rand beruehrt!');return;}
+  if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Rand beruehrt!');return;}
   for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Hindernis getroffen!');return;}
   for(const b of spBots)updateBot(b,dt);
   for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Bot getroffen! (zu langsam)');return;}}}
@@ -323,6 +342,8 @@ function mpHandle(msg){
   if(msg.type==='queue_update'){qcEl.textContent=msg.count+' / '+msg.max+' Spieler';}
   else if(msg.type==='game_init'){
     myId=msg.playerId;mpData={players:msg.players,obstacles:msg.obstacles,mapWidth:msg.mapWidth,mapHeight:msg.mapHeight};
+    // Canvas auf Server-Dimensionen setzen
+    setCanvasSize(msg.mapWidth,msg.mapHeight);applyZoom();
     const me=msg.players.find(p=>p.id===myId);
     if(me)mpLocal={x:me.x,y:me.y,angle:me.angle,speed:MIN_SPD,trail:[],alive:true};
     mpLastServerState=null;mpLastTime=null;
@@ -378,6 +399,8 @@ function mpEnd(msg){
   if(mpMode==='1v1'){btnAgain.textContent='Nochmal (1v1)';btnAgain.className='btn-1v1';}
   else{btnAgain.textContent='Nochmal (5 Spieler)';btnAgain.className='btn-5p';}
   showScreen('result');
+  setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
+  applyZoom();spInit();spDrawPreview();
 }
 
 document.getElementById('btn-single').addEventListener('click',()=>{spInit();spDrawPreview();spStartCountdown();});
@@ -390,7 +413,7 @@ document.getElementById('btn-again').addEventListener('click',()=>{
   else if(spLastMode==='1v1'){showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'1v1',platform:isMobile()?'mobile':'desktop'}));else connect('1v1');}
   else{showScreen('wait');phase='mp-wait';if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'join_queue',mode:'5p',platform:isMobile()?'mobile':'desktop'}));else connect('5p');}
 });
-document.getElementById('btn-menu').addEventListener('click',()=>{disconnect();showScreen('menu');phase='menu';hudEl.classList.add('hidden');specEl.style.display='none';});
+document.getElementById('btn-menu').addEventListener('click',()=>{disconnect();showScreen('menu');phase='menu';hudEl.classList.add('hidden');specEl.style.display='none';setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);applyZoom();spInit();spDrawPreview();});
 
 spInit();spDrawPreview();
 </script>
