@@ -264,7 +264,36 @@ function spEnd(outcome,reason){
   showScreen('result');spInit();spDrawPreview();
 }
 
-// ---- MULTIPLAYER ----
+// ---- CLIENT-SIDE PREDICTION ----
+let localMe=null; // lokale Simulation des eigenen Punktes
+
+function mpTickLocal(dt){
+  if(!localMe||!localMe.alive)return;
+  const turning=keys.ArrowLeft||keys.ArrowRight;
+  if(turning){
+    localMe.speed=Math.max(MIN_SPD,localMe.speed*Math.exp(-DECEL*dt));
+    const tr=TURN_RATE/(1+Math.pow(localMe.speed/300,2)*8);
+    if(keys.ArrowLeft)localMe.angle-=tr*dt;
+    if(keys.ArrowRight)localMe.angle+=tr*dt;
+  } else {
+    localMe.speed=Math.min(MAX_SPD,localMe.speed*Math.exp(ACCEL*dt));
+  }
+  localMe.x+=Math.cos(localMe.angle)*localMe.speed*dt;
+  localMe.y+=Math.sin(localMe.angle)*localMe.speed*dt;
+  localMe.trail.push({x:localMe.x,y:localMe.y});
+  if(localMe.trail.length>400)localMe.trail.shift();
+}
+
+let mpLastTs=null;
+function mpLoop(ts){
+  if(phase!=='mp-active'&&phase!=='mp-spectate'){mpLastTs=null;return;}
+  if(mpLastTs){
+    const dt=Math.min((ts-mpLastTs)/1000,0.05);
+    mpTickLocal(dt);
+  }
+  mpLastTs=ts;
+  requestAnimationFrame(mpLoop);
+}
 let ws=null,myId=null,mpData=null,mpMode='5p';
 
 function sendInput(){if(phase!=='mp-active'||!ws||ws.readyState!==1)return;const dir=keys.ArrowLeft?'left':keys.ArrowRight?'right':'none';ws.send(JSON.stringify({type:'input',direction:dir}));}
@@ -297,7 +326,12 @@ function mpHandle(msg){
   else if(msg.type==='countdown'){
     phase='mp-countdown';cdEl.style.display='block';
     if(msg.value>0){cdEl.textContent=msg.value;mpDrawPreview();}
-    else{cdEl.style.display='none';phase='mp-active';hudEl.classList.remove('hidden');hudActiveEl.textContent='Spieler: '+mpData.players.length;}
+    else{cdEl.style.display='none';phase='mp-active';hudEl.classList.remove('hidden');hudActiveEl.textContent='Spieler: '+mpData.players.length;
+      // Eigenen Spieler für lokale Simulation initialisieren
+      const me=mpData.players.find(p=>p.id===myId);
+      if(me)localMe={x:me.x,y:me.y,angle:me.angle,speed:MIN_SPD,trail:[],alive:true,colorHex:me.colorHex};
+      mpLastTs=null;requestAnimationFrame(mpLoop);
+    }
   }
   else if(msg.type==='game_state'){if(phase==='mp-active'||phase==='mp-spectate')mpRender(msg);}
   else if(msg.type==='game_over'){mpEnd(msg);}
@@ -312,20 +346,49 @@ function mpDrawPreview(){
   }
 }
 function mpRender(msg){
-  if(!mpData)return;drawBg(mpData.obstacles);
-  let me=null;
+  if(!mpData)return;
+  // Server-Zustand für Gegner übernehmen, eigenen Punkt lokal halten
+  let serverMe=null;
+  for(const p of msg.players){if(p.id===myId){serverMe=p;break;}}
+
+  // Wenn Server sagt wir sind tot → übernehmen
+  if(serverMe&&!serverMe.alive&&localMe&&localMe.alive){
+    localMe.alive=false;
+    if(phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}
+  }
+  // Server-Position sanft korrigieren (nur wenn große Abweichung)
+  if(serverMe&&serverMe.alive&&localMe&&localMe.alive){
+    const dx=serverMe.x-localMe.x,dy=serverMe.y-localMe.y;
+    if(dx*dx+dy*dy>60*60){
+      localMe.x+=(serverMe.x-localMe.x)*0.3;
+      localMe.y+=(serverMe.y-localMe.y)*0.3;
+      localMe.angle+=(serverMe.angle-localMe.angle)*0.3;
+      localMe.speed+=(serverMe.speed-localMe.speed)*0.3;
+    }
+  }
+
+  drawBg(mpData.obstacles);
+  // Gegner zeichnen (vom Server)
   for(const p of msg.players){
+    if(p.id===myId)continue;
     const col=h2r(p.colorHex||'#ffffff');
     if(p.alive){drawTrail(p.trail,p.speed,col);const pos=sc(p.x,p.y);ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();}
     else{const pos=sc(p.x,p.y);ctx.globalAlpha=0.25;ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();ctx.globalAlpha=1;}
-    if(p.id===myId)me=p;
   }
-  if(me&&!me.alive&&phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}
-  if(me){spdEl.textContent=Math.round(me.speed);maxSpdEl.textContent=Math.round(me.maxSpeed);}
-  timeEl.textContent=(msg.elapsedMs/1000).toFixed(1);hudActiveEl.textContent='Spieler: '+msg.activeCount;
+  // Eigenen Punkt lokal zeichnen
+  if(localMe&&localMe.alive){
+    drawTrail(localMe.trail,localMe.speed,h2r(localMe.colorHex||'#e74c3c'));
+    const pos=sc(localMe.x,localMe.y);
+    ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);
+    ctx.fillStyle=localMe.colorHex||'#e74c3c';ctx.fill();
+  } else if(serverMe&&!serverMe.alive){
+    const pos=sc(serverMe.x,serverMe.y);ctx.globalAlpha=0.25;ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=serverMe.colorHex||'#fff';ctx.fill();ctx.globalAlpha=1;
+  }
+  hudActiveEl.textContent='Spieler: '+msg.activeCount;
 }
 function mpEnd(msg){
   phase='result';hudEl.classList.add('hidden');specEl.style.display='none';cdEl.style.display='none';
+  localMe=null;
   const tEl=document.getElementById('result-title'),sEl=document.getElementById('result-sub');
   if(msg.winnerId===myId){tEl.style.color='#2ecc71';tEl.textContent='Sieg!';sEl.textContent='Du hast gewonnen!';}
   else if(!msg.winnerId){tEl.style.color='#f39c12';tEl.textContent='Unentschieden';sEl.textContent='Alle gleichzeitig ausgeschieden.';}
