@@ -122,13 +122,30 @@ function randomObstacles(width, height) {
 
 /**
  * Kollisionsfreie Startpositionen für `count` Spieler berechnen.
+ * Stellt sicher, dass in Startrichtung kein Hindernis direkt vor dem Spieler ist.
  */
 function safeStartPositions(count, obstacles, width, height) {
   const positions = [];
   const margin = PRADIUS + 40;
+  const CLEAR_DIST = 200; // Mindestfreiraum in Startrichtung
+  const CLEAR_STEPS = 10;
+
+  function pathClear(x, y, angle) {
+    for (let s = 1; s <= CLEAR_STEPS; s++) {
+      const dist = (s / CLEAR_STEPS) * CLEAR_DIST;
+      const px = x + Math.cos(angle) * dist;
+      const py = y + Math.sin(angle) * dist;
+      if (px < margin || px > width - margin || py < margin || py > height - margin) return false;
+      for (const o of obstacles) {
+        if (circleRect(px, py, PRADIUS + 10, o.x, o.y, o.w, o.h)) return false;
+      }
+    }
+    return true;
+  }
+
   for (let i = 0; i < count; i++) {
     let placed = false;
-    for (let attempt = 0; attempt < 200; attempt++) {
+    for (let attempt = 0; attempt < 300; attempt++) {
       const x = margin + Math.random() * (width - margin * 2);
       const y = margin + Math.random() * (height - margin * 2);
       let blocked = false;
@@ -136,15 +153,23 @@ function safeStartPositions(count, obstacles, width, height) {
         if (circleRect(x, y, PRADIUS + 20, o.x, o.y, o.w, o.h)) { blocked = true; break; }
       }
       if (blocked) continue;
-      // Mindestabstand zu anderen Startpositionen
       let tooClose = false;
       for (const p of positions) {
         const dx = x - p.x, dy = y - p.y;
         if (dx * dx + dy * dy < 80 * 80) { tooClose = true; break; }
       }
-      if (!tooClose) { positions.push({ x, y, angle: Math.random() * Math.PI * 2 }); placed = true; break; }
+      if (tooClose) continue;
+      // Zufälligen Winkel suchen der freie Bahn hat
+      let angle = Math.random() * Math.PI * 2;
+      let angleOk = false;
+      for (let a = 0; a < 8; a++) {
+        const testAngle = angle + (a / 8) * Math.PI * 2;
+        if (pathClear(x, y, testAngle)) { angle = testAngle; angleOk = true; break; }
+      }
+      if (!angleOk) continue;
+      positions.push({ x, y, angle }); placed = true; break;
     }
-    if (!placed) positions.push({ x: width / 2 + (Math.random() - 0.5) * 200, y: height / 3, angle: 0 });
+    if (!placed) positions.push({ x: width / 2 + (Math.random() - 0.5) * 200, y: height / 3, angle: -Math.PI / 2 });
   }
   return positions;
 }
