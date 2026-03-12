@@ -5,8 +5,8 @@
   <title>Curve Racer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #111; overflow: hidden; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 0; }
-    #game-container { position: relative; flex-shrink: 0; transform-origin: center center; margin-bottom: 0; }
+    body { background: #111; overflow: hidden; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100vw; height: 100vh; padding: 0; }
+    #game-container { position: relative; flex-shrink: 0; transform-origin: top center; margin-top: 0; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     #hud { position: absolute; top: 16px; left: 16px; z-index: 2; color: #fff; font-size: 14px; line-height: 1.8; pointer-events: none; }
     .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); color: white; }
@@ -103,16 +103,8 @@ function applyZoom(){
   const availH=window.innerHeight-controlsHeight;
   const scale=Math.min(window.innerWidth/GAME_W,availH/GAME_H);
   container.style.transform='scale('+scale+')';
-  // Box zentrieren im verfügbaren Raum (oberhalb der Buttons)
-  if(isMobile()&&controlsHeight>0){
-    const scaledHeight=GAME_H*scale;
-    const offset=(availH-scaledHeight)/2;
-    container.style.marginTop=offset+'px';
-    container.style.marginBottom=offset+'px';
-  }else{
-    container.style.marginTop='0';
-    container.style.marginBottom='0';
-  }
+  container.style.marginTop='0';
+  container.style.marginBottom='0';
 }
 
 setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
@@ -212,7 +204,7 @@ function findSafeSpawn(obstacles,mapW,mapH,excludeX,excludeY,preferAngle){
 function spInit(){
   spObstacles=randomObstacles();
   const sp=findSafeSpawn(spObstacles,GAME_W,GAME_H,null,null,-Math.PI/2);
-  spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[],alive:true};
+  spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[],alive:true,deathTime:null,deathReason:'',victoryTime:null};
   spMaxSpeed=MIN_SPD;
   spBots=Array.from({length:NUM_BOTS},()=>{const p=findSafeSpawn(spObstacles,GAME_W,GAME_H,sp.x,sp.y,null);return{x:p.x,y:p.y,angle:p.angle,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};});
 }
@@ -279,13 +271,42 @@ function spLoop(ts){
   spPlayer.x+=Math.cos(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.y+=Math.sin(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});if(spPlayer.trail.length>400)spPlayer.trail.shift();
-  const wall=BORDER+PRADIUS;
-  if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Rand beruehrt!'),400);return;}
-  for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Hindernis getroffen!'),400);return;}
+  
+  if(spPlayer.alive){
+    const wall=BORDER+PRADIUS;
+    if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){
+      spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');
+      spPlayer.alive=false;
+      spPlayer.deathReason='Rand beruehrt!';
+      spPlayer.deathTime=ts;
+    }
+    for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){
+      spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');
+      spPlayer.alive=false;
+      spPlayer.deathReason='Hindernis getroffen!';
+      spPlayer.deathTime=ts;
+      break;
+    }
+  }
+  
   for(const b of spBots)updateBot(b,dt);
-  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Bot getroffen! (zu langsam)'),400);return;}}}
+  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else if(spPlayer.alive){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;spPlayer.deathReason='Bot getroffen! (zu langsam)';spPlayer.deathTime=ts;}}}
   for(let i=0;i<spBots.length;i++){if(spBots[i].dead)continue;for(let j=i+1;j<spBots.length;j++){if(spBots[j].dead)continue;const dx=spBots[i].x-spBots[j].x,dy=spBots[i].y-spBots[j].y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spBots[i].speed>=spBots[j].speed){spawnExplosion(spBots[j].x,spBots[j].y,spBots[j].color);spBots[j].dead=true;}else{spawnExplosion(spBots[i].x,spBots[i].y,spBots[i].color);spBots[i].dead=true;}}}}
-  if(spBots.every(b=>b.dead)){spEnd('win','Alle Bots eliminiert!');return;}
+  
+  // Check if player died and enough time passed
+  if(!spPlayer.alive&&spPlayer.deathTime&&ts-spPlayer.deathTime>=400){
+    spEnd('lose',spPlayer.deathReason);
+    return;
+  }
+  
+  // Check if all bots are dead (victory)
+  if(spBots.every(b=>b.dead)&&spPlayer.alive&&!spPlayer.victoryTime){
+    spPlayer.victoryTime=ts;
+  }
+  if(spPlayer.victoryTime&&ts-spPlayer.victoryTime>=400){
+    spEnd('win','Alle Bots eliminiert!');
+    return;
+  }
   drawBg(spObstacles);updateParticles(dt);
   drawTrail(spPlayer.trail,spPlayer.speed,'rgb(231,76,60)');
   for(const b of spBots){if(b.dead)continue;drawTrail(b.trail,b.speed,h2r(b.color));ctx.beginPath();ctx.arc(b.x,b.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();}
