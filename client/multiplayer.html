@@ -5,8 +5,8 @@
   <title>Curve Racer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #111; overflow: hidden; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100vw; height: 100vh; padding: 0; }
-    #game-container { position: relative; flex-shrink: 0; transform-origin: center center; }
+    body { background: #111; overflow: hidden; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 0; }
+    #game-container { position: relative; flex-shrink: 0; transform-origin: center center; margin-bottom: 0; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     #hud { position: absolute; top: 16px; left: 16px; z-index: 2; color: #fff; font-size: 14px; line-height: 1.8; pointer-events: none; }
     .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); color: white; }
@@ -103,13 +103,15 @@ function applyZoom(){
   const availH=window.innerHeight-controlsHeight;
   const scale=Math.min(window.innerWidth/GAME_W,availH/GAME_H);
   container.style.transform='scale('+scale+')';
-  // Container nach oben schieben, damit Buttons direkt darunter sind
+  // Box zentrieren im verfügbaren Raum (oberhalb der Buttons)
   if(isMobile()&&controlsHeight>0){
     const scaledHeight=GAME_H*scale;
-    const topOffset=(availH-scaledHeight)/2;
-    container.style.marginTop=topOffset+'px';
+    const offset=(availH-scaledHeight)/2;
+    container.style.marginTop=offset+'px';
+    container.style.marginBottom=offset+'px';
   }else{
     container.style.marginTop='0';
+    container.style.marginBottom='0';
   }
 }
 
@@ -210,7 +212,7 @@ function findSafeSpawn(obstacles,mapW,mapH,excludeX,excludeY,preferAngle){
 function spInit(){
   spObstacles=randomObstacles();
   const sp=findSafeSpawn(spObstacles,GAME_W,GAME_H,null,null,-Math.PI/2);
-  spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[]};
+  spPlayer={x:sp.x,y:sp.y,angle:sp.angle,speed:MIN_SPD,trail:[],alive:true};
   spMaxSpeed=MIN_SPD;
   spBots=Array.from({length:NUM_BOTS},()=>{const p=findSafeSpawn(spObstacles,GAME_W,GAME_H,sp.x,sp.y,null);return{x:p.x,y:p.y,angle:p.angle,speed:MIN_SPD,color:BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],turning:0,thinkTimer:0,trail:[],dead:false};});
 }
@@ -231,7 +233,6 @@ function spStartCountdown(){
 
 function spBegin(){
   phase='sp-active';spStartTime=performance.now();
-  hudEl.classList.remove('hidden');hudActiveEl.textContent='Bots: '+spBots.filter(b=>!b.dead).length;
   lastTime=null;animId=requestAnimationFrame(spLoop);
 }
 
@@ -279,18 +280,27 @@ function spLoop(ts){
   spPlayer.y+=Math.sin(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});if(spPlayer.trail.length>400)spPlayer.trail.shift();
   const wall=BORDER+PRADIUS;
-  if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Rand beruehrt!');return;}
-  for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Hindernis getroffen!');return;}
+  if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Rand beruehrt!'),400);return;}
+  for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Hindernis getroffen!'),400);return;}
   for(const b of spBots)updateBot(b,dt);
-  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Bot getroffen! (zu langsam)');return;}}}
+  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;setTimeout(()=>spEnd('lose','Bot getroffen! (zu langsam)'),400);return;}}}
   for(let i=0;i<spBots.length;i++){if(spBots[i].dead)continue;for(let j=i+1;j<spBots.length;j++){if(spBots[j].dead)continue;const dx=spBots[i].x-spBots[j].x,dy=spBots[i].y-spBots[j].y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spBots[i].speed>=spBots[j].speed){spawnExplosion(spBots[j].x,spBots[j].y,spBots[j].color);spBots[j].dead=true;}else{spawnExplosion(spBots[i].x,spBots[i].y,spBots[i].color);spBots[i].dead=true;}}}}
   if(spBots.every(b=>b.dead)){spEnd('win','Alle Bots eliminiert!');return;}
   drawBg(spObstacles);updateParticles(dt);
   drawTrail(spPlayer.trail,spPlayer.speed,'rgb(231,76,60)');
   for(const b of spBots){if(b.dead)continue;drawTrail(b.trail,b.speed,h2r(b.color));ctx.beginPath();ctx.arc(b.x,b.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();}
-  ctx.beginPath();ctx.arc(spPlayer.x,spPlayer.y,PRADIUS,0,Math.PI*2);ctx.fillStyle='#e74c3c';ctx.fill();
+  // Spieler mit Glow ab Tempo 200
+  if(spPlayer.alive){
+    ctx.save();
+    if(spPlayer.speed>=200){
+      const glowIntensity=Math.min(1,(spPlayer.speed-200)/(MAX_SPD-200));
+      ctx.shadowColor='rgba(255,255,200,'+(glowIntensity*0.9)+')';
+      ctx.shadowBlur=15+glowIntensity*40;
+    }
+    ctx.beginPath();ctx.arc(spPlayer.x,spPlayer.y,PRADIUS,0,Math.PI*2);ctx.fillStyle='#e74c3c';ctx.fill();
+    ctx.restore();
+  }
   drawParticles();
-  hudActiveEl.textContent='Bots: '+spBots.filter(b=>!b.dead).length;
   animId=requestAnimationFrame(spLoop);
 }
 
@@ -362,7 +372,7 @@ function mpHandle(msg){
   else if(msg.type==='countdown'){
     phase='mp-countdown';cdEl.style.display='block';
     if(msg.value>0){cdEl.textContent=msg.value;mpDrawPreview();}
-    else{cdEl.style.display='none';phase='mp-active';hudEl.classList.remove('hidden');hudActiveEl.textContent='Spieler: '+mpData.players.length;mpLastTime=null;mpAnimId=requestAnimationFrame(mpRenderLoop);}
+    else{cdEl.style.display='none';phase='mp-active';mpLastTime=null;mpAnimId=requestAnimationFrame(mpRenderLoop);}
   }
   else if(msg.type==='game_state'){
     mpLastServerState=msg;
@@ -389,10 +399,20 @@ function mpDrawFrame(msg){
     if(p.alive){drawTrail(p.trail,p.speed,col);ctx.beginPath();ctx.arc(p.x,p.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();}
     else{if(!p._exploded){p._exploded=true;spawnExplosion(p.x,p.y,p.colorHex||'#fff');}ctx.globalAlpha=0.2;ctx.beginPath();ctx.arc(p.x,p.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();ctx.globalAlpha=1;}
   }
-  if(mpLocal&&mpLocal.alive){const myColor=me?me.colorHex:'#e74c3c';drawTrail(mpLocal.trail,mpLocal.speed,h2r(myColor));ctx.beginPath();ctx.arc(mpLocal.x,mpLocal.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=myColor;ctx.fill();}
+  if(mpLocal&&mpLocal.alive){
+    const myColor=me?me.colorHex:'#e74c3c';
+    drawTrail(mpLocal.trail,mpLocal.speed,h2r(myColor));
+    ctx.save();
+    if(mpLocal.speed>=200){
+      const glowIntensity=Math.min(1,(mpLocal.speed-200)/(MAX_SPD-200));
+      ctx.shadowColor='rgba(255,255,200,'+(glowIntensity*0.9)+')';
+      ctx.shadowBlur=15+glowIntensity*40;
+    }
+    ctx.beginPath();ctx.arc(mpLocal.x,mpLocal.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=myColor;ctx.fill();
+    ctx.restore();
+  }
   drawParticles();
   if(me&&!me.alive&&mpLocal){if(!me._exploded){me._exploded=true;spawnExplosion(me.x,me.y,me.colorHex||'#e74c3c');}mpLocal.alive=false;if(phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}}
-  if(me){hudActiveEl.textContent='Spieler: '+msg.activeCount;}
 }
 
 function mpEnd(msg){
