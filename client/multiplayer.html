@@ -107,11 +107,38 @@ function h2r(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),
 let _mapW=1920,_mapH=1080;
 function sc(x,y){return{x:x/_mapW*canvas.width,y:y/_mapH*canvas.height};}
 
+// ---- PARTIKEL ----
+const particles=[];
+function spawnExplosion(x,y,color){
+  for(let i=0;i<18;i++){
+    const angle=Math.random()*Math.PI*2,speed=80+Math.random()*220;
+    particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life:1,color});
+  }
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx*dt;p.y+=p.vy*dt;
+    p.vx*=0.92;p.vy*=0.92;
+    p.life-=dt*2.5;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  for(const p of particles){
+    const pos=sc(p.x,p.y);
+    ctx.save();ctx.globalAlpha=Math.max(0,p.life);
+    ctx.beginPath();ctx.arc(pos.x,pos.y,4+p.life*6,0,Math.PI*2);
+    ctx.fillStyle=p.color;ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawBg(obs){
   const W=canvas.width,H=canvas.height,sx=W/_mapW,sy=H/_mapH;
   ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='#3498db';
-  for(const o of obs){ctx.fillRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);ctx.strokeStyle='#5dade2';ctx.lineWidth=1;ctx.strokeRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);}
+  ctx.fillStyle='#aaa';
+  for(const o of obs){ctx.fillRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.strokeRect(o.x*sx,o.y*sy,o.w*sx,o.h*sy);}
 }
 
 function drawTrail(trail,speed,color){
@@ -225,8 +252,8 @@ function updateBot(bot,dt){
   else bot.speed=Math.min(MAX_SPD,bot.speed*Math.exp(ACCEL*dt));
   bot.x+=Math.cos(bot.angle)*bot.speed*dt;bot.y+=Math.sin(bot.angle)*bot.speed*dt;
   bot.trail.push({x:bot.x,y:bot.y});if(bot.trail.length>300)bot.trail.shift();
-  if(bot.x<PRADIUS||bot.x>_mapW-PRADIUS||bot.y<PRADIUS||bot.y>_mapH-PRADIUS){bot.dead=true;return;}
-  for(const o of spObstacles)if(circleRect(bot.x,bot.y,PRADIUS,o.x,o.y,o.w,o.h)){bot.dead=true;return;}
+  if(bot.x<PRADIUS||bot.x>_mapW-PRADIUS||bot.y<PRADIUS||bot.y>_mapH-PRADIUS){spawnExplosion(bot.x,bot.y,bot.color);bot.dead=true;return;}
+  for(const o of spObstacles)if(circleRect(bot.x,bot.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(bot.x,bot.y,bot.color);bot.dead=true;return;}
 }
 function spLoop(ts){
   if(phase!=='sp-active'){animId=null;return;}
@@ -242,16 +269,18 @@ function spLoop(ts){
   spPlayer.x+=Math.cos(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.y+=Math.sin(spPlayer.angle)*spPlayer.speed*dt;
   spPlayer.trail.push({x:spPlayer.x,y:spPlayer.y});if(spPlayer.trail.length>400)spPlayer.trail.shift();
-  if(spPlayer.x<PRADIUS||spPlayer.x>_mapW-PRADIUS||spPlayer.y<PRADIUS||spPlayer.y>_mapH-PRADIUS){spEnd('lose','Rand beruehrt!');return;}
-  for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spEnd('lose','Hindernis getroffen!');return;}
+  if(spPlayer.x<PRADIUS||spPlayer.x>_mapW-PRADIUS||spPlayer.y<PRADIUS||spPlayer.y>_mapH-PRADIUS){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Rand beruehrt!');return;}
+  for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Hindernis getroffen!');return;}
   for(const b of spBots)updateBot(b,dt);
-  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spEnd('lose','Bot getroffen! (zu langsam)');return;}}}
-  for(let i=0;i<spBots.length;i++){if(spBots[i].dead)continue;for(let j=i+1;j<spBots.length;j++){if(spBots[j].dead)continue;const dx=spBots[i].x-spBots[j].x,dy=spBots[i].y-spBots[j].y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spBots[i].speed>=spBots[j].speed)spBots[j].dead=true;else spBots[i].dead=true;}}}
+  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else{spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spEnd('lose','Bot getroffen! (zu langsam)');return;}}}
+  for(let i=0;i<spBots.length;i++){if(spBots[i].dead)continue;for(let j=i+1;j<spBots.length;j++){if(spBots[j].dead)continue;const dx=spBots[i].x-spBots[j].x,dy=spBots[i].y-spBots[j].y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spBots[i].speed>=spBots[j].speed){spawnExplosion(spBots[j].x,spBots[j].y,spBots[j].color);spBots[j].dead=true;}else{spawnExplosion(spBots[i].x,spBots[i].y,spBots[i].color);spBots[i].dead=true;}}}}
   if(spBots.every(b=>b.dead)){spEnd('win','Alle Bots eliminiert!');return;}
   drawBg(spObstacles);
+  updateParticles(dt);
   drawTrail(spPlayer.trail,spPlayer.speed,'rgb(231,76,60)');
   for(const b of spBots){if(b.dead)continue;drawTrail(b.trail,b.speed,h2r(b.color));const p=sc(b.x,b.y);ctx.beginPath();ctx.arc(p.x,p.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();}
   const pp=sc(spPlayer.x,spPlayer.y);ctx.beginPath();ctx.arc(pp.x,pp.y,PRADIUS,0,Math.PI*2);ctx.fillStyle='#e74c3c';ctx.fill();
+  drawParticles();
   if(spdEl)spdEl.textContent=Math.round(spPlayer.speed);if(maxSpdEl)maxSpdEl.textContent=Math.round(spMaxSpeed);
   if(timeEl)timeEl.textContent=((ts-spStartTime)/1000).toFixed(1);
   hudActiveEl.textContent='Bots: '+spBots.filter(b=>!b.dead).length;
@@ -362,22 +391,29 @@ function mpDrawPreview(){
   }
 }
 function mpDrawFrame(msg){
-  if(!mpData)return;drawBg(mpData.obstacles);
+  if(!mpData)return;
+  const dt=mpLastTime?(performance.now()-mpLastTime)/1000:0;
+  updateParticles(dt);
+  drawBg(mpData.obstacles);
   let me=null;
   for(const p of msg.players){
-    if(p.id===myId){me=p;continue;}// eigenen Punkt überspringen, kommt aus mpLocal
+    if(p.id===myId){me=p;continue;}
     const col=h2r(p.colorHex||'#ffffff');
     if(p.alive){drawTrail(p.trail,p.speed,col);const pos=sc(p.x,p.y);ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();}
-    else{const pos=sc(p.x,p.y);ctx.globalAlpha=0.25;ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();ctx.globalAlpha=1;}
+    else{
+      // Explosion beim Tod auslösen (einmalig)
+      if(!p._exploded){p._exploded=true;spawnExplosion(p.x,p.y,p.colorHex||'#fff');}
+      const pos=sc(p.x,p.y);ctx.globalAlpha=0.2;ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex||'#fff';ctx.fill();ctx.globalAlpha=1;
+    }
   }
-  // Eigenen Punkt aus lokalem State zeichnen
   if(mpLocal&&mpLocal.alive){
     const myColor=me?me.colorHex:'#e74c3c';
     drawTrail(mpLocal.trail,mpLocal.speed,h2r(myColor));
     const pos=sc(mpLocal.x,mpLocal.y);ctx.beginPath();ctx.arc(pos.x,pos.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=myColor;ctx.fill();
   }
-  // Tod prüfen
+  drawParticles();
   if(me&&!me.alive&&mpLocal){
+    if(!me._exploded){me._exploded=true;spawnExplosion(me.x,me.y,me.colorHex||'#e74c3c');}
     mpLocal.alive=false;
     if(phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}
   }
