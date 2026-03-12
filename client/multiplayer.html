@@ -128,11 +128,11 @@ let spPlayer=null,spBots=[],spObstacles=[];
 let spLastMode='single';
 
 const keys={ArrowLeft:false,ArrowRight:false};
-window.addEventListener('keydown',e=>{if(!(e.key in keys))return;e.preventDefault();keys[e.key]=true;if(phase==='mp-active')sendInput();});
-window.addEventListener('keyup',e=>{if(!(e.key in keys))return;keys[e.key]=false;if(phase==='mp-active')sendInput();});
+window.addEventListener('keydown',e=>{if(!(e.key in keys))return;e.preventDefault();keys[e.key]=true;});
+window.addEventListener('keyup',e=>{if(!(e.key in keys))return;keys[e.key]=false;});
 
 const btnLeft=document.getElementById('btn-left'),btnRight=document.getElementById('btn-right');
-function setKey(key,val){keys[key]=val;if(phase==='mp-active')sendInput();}
+function setKey(key,val){keys[key]=val;}
 btnLeft.addEventListener('touchstart',e=>{e.preventDefault();setKey('ArrowLeft',true);},{passive:false});
 btnLeft.addEventListener('touchend',e=>{e.preventDefault();setKey('ArrowLeft',false);},{passive:false});
 btnRight.addEventListener('touchstart',e=>{e.preventDefault();setKey('ArrowRight',true);},{passive:false});
@@ -341,11 +341,11 @@ function spEnd(outcome,reason){
 let ws=null,myId=null,mpData=null,mpMode='5p';
 let mpLocal=null;
 
-function sendInput(){if(phase!=='mp-active'||!ws||ws.readyState!==1)return;const dir=keys.ArrowLeft?'left':keys.ArrowRight?'right':'none';ws.send(JSON.stringify({type:'input',direction:dir}));}
+function sendState(){if(phase!=='mp-active'||!ws||ws.readyState!==1||!mpLocal)return;ws.send(JSON.stringify({type:'state',x:mpLocal.x,y:mpLocal.y,angle:mpLocal.angle,speed:mpLocal.speed,alive:mpLocal.alive}));}
 function getUrl(){const p=location.protocol==='https:'?'wss':'ws';return p+'://'+location.host;}
 
 function mpTickLocal(dt){
-  if(!mpLocal)return;
+  if(!mpLocal||!mpLocal.alive)return;
   const turning=keys.ArrowLeft||keys.ArrowRight;
   if(turning){mpLocal.speed=Math.max(MIN_SPD,mpLocal.speed*Math.exp(-DECEL*dt));}
   else{mpLocal.speed=Math.min(MAX_SPD,mpLocal.speed*Math.exp(ACCEL*dt));}
@@ -356,14 +356,41 @@ function mpTickLocal(dt){
   mpLocal.y+=Math.sin(mpLocal.angle)*mpLocal.speed*dt;
   mpLocal.trail.push({x:mpLocal.x,y:mpLocal.y});
   if(mpLocal.trail.length>400)mpLocal.trail.shift();
+  
+  // Clientseitige Kollisionsprüfung
+  if(!mpData)return;
+  const wall=BORDER+PRADIUS;
+  if(mpLocal.x<wall||mpLocal.x>mpData.mapWidth-wall||mpLocal.y<wall||mpLocal.y>mpData.mapHeight-wall){
+    console.log('[CLIENT DEATH] Rand! x:'+Math.round(mpLocal.x)+' y:'+Math.round(mpLocal.y)+' mapW:'+mpData.mapWidth+' mapH:'+mpData.mapHeight);
+    spawnExplosion(mpLocal.x,mpLocal.y,'#e74c3c');
+    mpLocal.alive=false;
+    mpLocal.deathReason='Rand (Client)';
+    return;
+  }
+  for(const o of mpData.obstacles){
+    if(circleRect(mpLocal.x,mpLocal.y,PRADIUS,o.x,o.y,o.w,o.h)){
+      console.log('[CLIENT DEATH] Hindernis! x:'+Math.round(mpLocal.x)+' y:'+Math.round(mpLocal.y)+' obs:',o);
+      spawnExplosion(mpLocal.x,mpLocal.y,'#e74c3c');
+      mpLocal.alive=false;
+      mpLocal.deathReason='Hindernis (Client)';
+      return;
+    }
+  }
 }
 
-let mpAnimId=null,mpLastTime=null;
+let mpAnimId=null,mpLastTime=null,mpLastStateSend=0;
 function mpRenderLoop(ts){
   if(phase!=='mp-active'&&phase!=='mp-spectate'){mpAnimId=null;return;}
   if(!mpLastTime)mpLastTime=ts;
   const dt=Math.min((ts-mpLastTime)/1000,0.05);mpLastTime=ts;
-  if(phase==='mp-active')mpTickLocal(dt);
+  if(phase==='mp-active'){
+    mpTickLocal(dt);
+    // Send state to server at 60Hz
+    if(ts-mpLastStateSend>=16.67){
+      sendState();
+      mpLastStateSend=ts;
+    }
+  }
   if(mpData&&mpLastServerState)mpDrawFrame(mpLastServerState);
   mpAnimId=requestAnimationFrame(mpRenderLoop);
 }
@@ -386,14 +413,14 @@ function mpHandle(msg){
     // Canvas auf Server-Dimensionen setzen
     setCanvasSize(msg.mapWidth,msg.mapHeight);applyZoom();
     const me=msg.players.find(p=>p.id===myId);
-    if(me)mpLocal={x:me.x,y:me.y,angle:me.angle,speed:MIN_SPD,trail:[],alive:true};
+    if(me)mpLocal={x:me.x,y:me.y,angle:me.angle,speed:MIN_SPD,trail:[],alive:true,deathReason:null};
     mpLastServerState=null;mpLastTime=null;
     phase='mp-preview';for(const el of Object.values(SCREENS))el.classList.add('hidden');hudEl.classList.add('hidden');mpDrawPreview();
   }
   else if(msg.type==='countdown'){
     phase='mp-countdown';cdEl.style.display='block';
     if(msg.value>0){cdEl.textContent=msg.value;mpDrawPreview();}
-    else{cdEl.style.display='none';phase='mp-active';mpLastTime=null;mpAnimId=requestAnimationFrame(mpRenderLoop);}
+    else{cdEl.style.display='none';phase='mp-active';mpLastTime=null;mpLastStateSend=0;mpAnimId=requestAnimationFrame(mpRenderLoop);}
   }
   else if(msg.type==='game_state'){
     mpLastServerState=msg;
@@ -433,7 +460,25 @@ function mpDrawFrame(msg){
     ctx.restore();
   }
   drawParticles();
-  if(me&&!me.alive&&mpLocal){if(!me._exploded){me._exploded=true;spawnExplosion(me.x,me.y,me.colorHex||'#e74c3c');}mpLocal.alive=false;if(phase==='mp-active'){phase='mp-spectate';specEl.style.display='block';}}
+  // Clientseitiger Tod durch Hindernis/Rand
+  if(mpLocal&&!mpLocal.alive&&phase==='mp-active'){
+    console.log('[CLIENT] Switching to spectate, reason:',mpLocal.deathReason||'unknown');
+    phase='mp-spectate';
+    specEl.style.display='block';
+    specEl.textContent='Du schaust zu ('+(mpLocal.deathReason||'unbekannt')+')';
+  }
+  // Serverseitiger Tod (durch anderen Spieler)
+  if(me&&!me.alive&&mpLocal&&mpLocal.alive){
+    console.log('[SERVER DEATH] Server says you are dead');
+    if(!me._exploded){me._exploded=true;spawnExplosion(me.x,me.y,me.colorHex||'#e74c3c');}
+    mpLocal.alive=false;
+    mpLocal.deathReason='Spieler-Kollision (Server)';
+    if(phase==='mp-active'){
+      phase='mp-spectate';
+      specEl.style.display='block';
+      specEl.textContent='Du schaust zu (Spieler-Kollision)';
+    }
+  }
 }
 
 function mpEnd(msg){

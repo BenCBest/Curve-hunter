@@ -64,9 +64,9 @@ wss.on('connection', (ws) => {
         playerQueue.delete(playerId);
         break;
       }
-      case 'input': {
+      case 'state': {
         const room = playerRoom.get(playerId);
-        if (room) room.setInput(playerId, msg.direction);
+        if (room) room.updatePlayerState(playerId, msg);
         break;
       }
     }

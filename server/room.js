@@ -1,9 +1,6 @@
 // Spielraum-Modul
 const { v4: uuidv4 } = require('uuid');
-const {
-  tickPlayer, checkCollisions, randomObstacles, safeStartPositions,
-  MIN_SPEED, PRADIUS
-} = require('./physics');
+const { checkCollisions, randomObstacles, safeStartPositions, MIN_SPEED, PRADIUS } = require('./physics');
 
 const PLAYER_COLORS = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 const MAP_WIDTH_LANDSCAPE  = 1920;
@@ -39,7 +36,6 @@ class Room {
         maxSpeed: MIN_SPEED,
         trail: [],
         alive: true,
-        lastInput: 'none',
         _mapWidth: MAP_WIDTH,
         _mapHeight: MAP_HEIGHT
       });
@@ -105,15 +101,8 @@ class Room {
     this._lastTick = now;
     this.tick++;
 
-    const alivePlayers = [...this.players.values()].filter(p => p.alive);
-
-    // Physik
-    for (const p of alivePlayers) {
-      tickPlayer(p, p.lastInput, dt);
-    }
-
-    // Kollisionen
-    checkCollisions([...this.players.values()], this.obstacles);
+    // Nur Spieler-Spieler Kollisionen prüfen (Hindernisse/Rand sind clientseitig)
+    checkCollisions([...this.players.values()]);
 
     // Spielende prüfen
     const stillAlive = [...this.players.values()].filter(p => p.alive);
@@ -166,10 +155,28 @@ class Room {
     if (!anyConnected) this.destroy();
   }
 
-  setInput(playerId, direction) {
+  updatePlayerState(playerId, state) {
     if (this.status !== 'active') return;
     const p = this.players.get(playerId);
-    if (p && p.alive) p.lastInput = direction;
+    if (!p) return;
+    
+    // Update player state from client
+    p.x = state.x;
+    p.y = state.y;
+    p.angle = state.angle;
+    p.speed = state.speed;
+    p.alive = state.alive;
+    
+    if (p.speed > p.maxSpeed) p.maxSpeed = p.speed;
+    
+    // Update trail
+    p.trail.push({ x: p.x, y: p.y });
+    if (p.trail.length > 300) p.trail.shift();
+    
+    // Debug log
+    if (this.tick % 60 === 0) {
+      console.log(`[Room ${this.roomId}] Player ${playerId.slice(0,8)} at (${Math.round(p.x)}, ${Math.round(p.y)}) speed:${Math.round(p.speed)}`);
+    }
   }
 
   destroy() {

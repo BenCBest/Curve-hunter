@@ -50,30 +50,12 @@ function circleRect(cx, cy, r, rx, ry, rw, rh) {
 }
 
 /**
- * Kollisionen prüfen und auflösen.
+ * Kollisionen zwischen Spielern prüfen und auflösen.
  * Mutiert player.alive und player.speed direkt.
  * @param {object[]} players - Array von ServerPlayer-Objekten
- * @param {object[]} obstacles - Array von { x, y, w, h }
  */
-function checkCollisions(players, obstacles) {
-  // Spieler-Hindernis
-  for (const p of players) {
-    if (!p.alive) continue;
-    const wall = MAP_BORDER + PRADIUS;
-    if (p.x < wall || p.x > p._mapWidth - wall ||
-        p.y < wall || p.y > p._mapHeight - wall) {
-      p.alive = false;
-      continue;
-    }
-    for (const o of obstacles) {
-      if (circleRect(p.x, p.y, PRADIUS, o.x, o.y, o.w, o.h)) {
-        p.alive = false;
-        break;
-      }
-    }
-  }
-
-  // Spieler-Spieler
+function checkCollisions(players) {
+  // Nur noch Spieler-Spieler Kollisionen
   for (let i = 0; i < players.length; i++) {
     if (!players[i].alive) continue;
     for (let j = i + 1; j < players.length; j++) {
