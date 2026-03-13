@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Curve Racer</title>
@@ -43,29 +43,29 @@
 </div>
 <div id="screen-menu" class="overlay">
   <h1>Curve Racer</h1>
-  <p>Pfeiltasten zum Lenken</p>
-  <p>Keine Taste = beschleunigen | Taste = abbremsen + kurven</p>
-  <p>Schnellerer Spieler gewinnt die Kollision!</p>
-  <button id="btn-single" class="btn-sp">Einzelspieler (vs Bots)</button>
+  <p>Arrow keys to steer</p>
+  <p>No key = accelerate | Key = brake + turn</p>
+  <p>Faster player wins the collision!</p>
+  <button id="btn-single" class="btn-sp">Singleplayer (vs Bots)</button>
   <hr class="divider">
   <button id="btn-1v1"  class="btn-1v1">Online: 1v1</button>
-  <button id="btn-1v1-clean"  class="btn-1v1">Online: 1v1 (ohne Hindernisse)</button>
-  <button id="btn-find" class="btn-5p">Online: 5 Spieler</button>
+  <button id="btn-1v1-clean"  class="btn-1v1">Online: 1v1 (no obstacles)</button>
+  <button id="btn-find" class="btn-5p">Online: 5 Players</button>
   <p id="error-msg"></p>
 </div>
 <div id="screen-wait" class="overlay hidden">
-  <h1 id="wait-title">Suche Spieler...</h1>
-  <p id="queue-count">0 / ? Spieler</p>
-  <button id="btn-cancel" class="btn-ter">Abbrechen</button>
+  <h1 id="wait-title">Finding players...</h1>
+  <p id="queue-count">0 / ? Players</p>
+  <button id="btn-cancel" class="btn-ter">Cancel</button>
 </div>
 <div id="screen-result" class="overlay hidden">
-  <h1 id="result-title">Ergebnis</h1>
+  <h1 id="result-title">Result</h1>
   <p id="result-sub"></p>
-  <button id="btn-again" class="btn-5p">Nochmal</button>
-  <button id="btn-menu"  class="btn-ter">Hauptmenue</button>
+  <button id="btn-again" class="btn-5p">Play Again</button>
+  <button id="btn-menu"  class="btn-ter">Main Menu</button>
 </div>
 <div id="countdown"></div>
-<div id="spectate">Du schaust zu</div>
+<div id="spectate">Spectating</div>
 </div>
 <div id="mobile-controls">
   <div class="mobile-btn" id="btn-left">&#8592;</div>
@@ -215,7 +215,7 @@ function spDrawPreview(){
   for(const b of spBots){drawTrail(fakeTrail(b.x,b.y,b.angle),MIN_SPD,h2r(b.color));ctx.beginPath();ctx.arc(b.x,b.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();}
   drawTrail(fakeTrail(spPlayer.x,spPlayer.y,spPlayer.angle),MIN_SPD,'rgb(231,76,60)');
   ctx.beginPath();ctx.arc(spPlayer.x,spPlayer.y,PRADIUS,0,Math.PI*2);ctx.fillStyle='#e74c3c';ctx.fill();
-  ctx.fillStyle='#fff';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText('Das bist du!',spPlayer.x,spPlayer.y-PRADIUS-12);
+  ctx.fillStyle='#fff';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText('This is you!',spPlayer.x,spPlayer.y-PRADIUS-12);
 }
 
 function spStartCountdown(){
@@ -280,20 +280,20 @@ function spLoop(ts){
     if(spPlayer.x<wall||spPlayer.x>GAME_W-wall||spPlayer.y<wall||spPlayer.y>GAME_H-wall){
       spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');
       spPlayer.alive=false;
-      spPlayer.deathReason='Rand beruehrt!';
+      spPlayer.deathReason='Hit wall!';
       spPlayer.deathTime=ts;
     }
     for(const o of spObstacles)if(circleRect(spPlayer.x,spPlayer.y,PRADIUS,o.x,o.y,o.w,o.h)){
       spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');
       spPlayer.alive=false;
-      spPlayer.deathReason='Hindernis getroffen!';
+      spPlayer.deathReason='Hit obstacle!';
       spPlayer.deathTime=ts;
       break;
     }
   }
   
   for(const b of spBots)updateBot(b,dt);
-  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else if(spPlayer.alive){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;spPlayer.deathReason='Bot getroffen! (zu langsam)';spPlayer.deathTime=ts;}}}
+  for(const b of spBots){if(b.dead)continue;const dx=spPlayer.x-b.x,dy=spPlayer.y-b.y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spPlayer.speed>=b.speed){spawnExplosion(b.x,b.y,b.color);b.dead=true;spPlayer.speed=Math.max(MIN_SPD,spPlayer.speed/2);}else if(spPlayer.alive){spawnExplosion(spPlayer.x,spPlayer.y,'#e74c3c');spPlayer.alive=false;spPlayer.deathReason='Hit bot! (too slow)';spPlayer.deathTime=ts;}}}
   for(let i=0;i<spBots.length;i++){if(spBots[i].dead)continue;for(let j=i+1;j<spBots.length;j++){if(spBots[j].dead)continue;const dx=spBots[i].x-spBots[j].x,dy=spBots[i].y-spBots[j].y;if(dx*dx+dy*dy<(PRADIUS*2)*(PRADIUS*2)){if(spBots[i].speed>=spBots[j].speed){spawnExplosion(spBots[j].x,spBots[j].y,spBots[j].color);spBots[j].dead=true;}else{spawnExplosion(spBots[i].x,spBots[i].y,spBots[i].color);spBots[i].dead=true;}}}}
   
   // Check if player died and enough time passed
@@ -307,7 +307,7 @@ function spLoop(ts){
     spPlayer.victoryTime=ts;
   }
   if(spPlayer.victoryTime&&ts-spPlayer.victoryTime>=400){
-    spEnd('win','Alle Bots eliminiert!');
+    spEnd('win','All bots eliminated!');
     return;
   }
   drawBg(spObstacles);updateParticles(dt);
@@ -333,12 +333,12 @@ function spEnd(outcome,reason){
   phase='result';hudEl.classList.add('hidden');
   const tEl=document.getElementById('result-title'),sEl=document.getElementById('result-sub');
   const elapsed=((performance.now()-spStartTime)/1000).toFixed(1);
-  if(outcome==='win'){tEl.style.color='#2ecc71';tEl.textContent='Sieg!';}
+  if(outcome==='win'){tEl.style.color='#2ecc71';tEl.textContent='Victory!';}
   else{tEl.style.color='#e74c3c';tEl.textContent='Game Over';}
-  sEl.textContent=reason+' | Hoechstgeschw.: '+Math.round(spMaxSpeed)+' | Zeit: '+elapsed+'s';
+  sEl.textContent=reason+' | Top speed: '+Math.round(spMaxSpeed)+' | Time: '+elapsed+'s';
   spLastMode='single';
   const btnAgain=document.getElementById('btn-again');
-  btnAgain.textContent='Nochmal (Einzelspieler)';btnAgain.className='btn-sp';
+  btnAgain.textContent='Play Again (Singleplayer)';btnAgain.className='btn-sp';
   showScreen('result');spInit();spDrawPreview();
 }
 let ws=null,myId=null,mpData=null,mpMode='5p';
@@ -382,7 +382,7 @@ function mpTickLocal(dt){
     console.log('[CLIENT DEATH] Rand! x:'+Math.round(mpLocal.x)+' y:'+Math.round(mpLocal.y)+' mapW:'+mpData.mapWidth+' mapH:'+mpData.mapHeight);
     spawnExplosion(mpLocal.x,mpLocal.y,'#e74c3c');
     mpLocal.alive=false;
-    mpLocal.deathReason='Rand (Client)';
+    mpLocal.deathReason='Wall (Client)';
     return;
   }
   for(const o of mpData.obstacles){
@@ -390,7 +390,7 @@ function mpTickLocal(dt){
       console.log('[CLIENT DEATH] Hindernis! x:'+Math.round(mpLocal.x)+' y:'+Math.round(mpLocal.y)+' obs:',o);
       spawnExplosion(mpLocal.x,mpLocal.y,'#e74c3c');
       mpLocal.alive=false;
-      mpLocal.deathReason='Hindernis (Client)';
+      mpLocal.deathReason='Obstacle (Client)';
       return;
     }
   }
@@ -416,16 +416,16 @@ let mpLastServerState=null;
 
 function connect(mode){
   mpMode=mode;errEl.textContent='';
-  try{ws=new WebSocket(getUrl());}catch(e){errEl.textContent='Verbindung fehlgeschlagen.';return;}
-  ws.onopen=()=>{ws.send(JSON.stringify({type:'join_queue',mode:mode,platform:isMobile()?'mobile':'desktop'}));waitTitleEl.textContent=mode==='1v1'||mode==='1v1-clean'?'Suche Gegner...':'Suche Spieler...';qcEl.textContent='0 / '+(mode==='1v1'||mode==='1v1-clean'?'2':'5')+' Spieler';showScreen('wait');phase='mp-wait';};
-  ws.onerror=()=>{errEl.textContent='Verbindung fehlgeschlagen.';showScreen('menu');phase='menu';ws=null;};
-  ws.onclose=()=>{if(phase!=='menu'&&phase!=='result'){errEl.textContent='Verbindung getrennt.';showScreen('menu');phase='menu';}ws=null;};
+  try{ws=new WebSocket(getUrl());}catch(e){errEl.textContent='Connection failed.';return;}
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'join_queue',mode:mode,platform:isMobile()?'mobile':'desktop'}));waitTitleEl.textContent=mode==='1v1'||mode==='1v1-clean'?'Finding opponent...':'Finding players...';qcEl.textContent='0 / '+(mode==='1v1'||mode==='1v1-clean'?'2':'5')+' Players';showScreen('wait');phase='mp-wait';};
+  ws.onerror=()=>{errEl.textContent='Connection failed.';showScreen('menu');phase='menu';ws=null;};
+  ws.onclose=()=>{if(phase!=='menu'&&phase!=='result'){errEl.textContent='Connection lost.';showScreen('menu');phase='menu';}ws=null;};
   ws.onmessage=e=>{try{mpHandle(JSON.parse(e.data));}catch(_){}};
 }
 function disconnect(){if(ws){ws.close();ws=null;}}
 
 function mpHandle(msg){
-  if(msg.type==='queue_update'){qcEl.textContent=msg.count+' / '+msg.max+' Spieler';}
+  if(msg.type==='queue_update'){qcEl.textContent=msg.count+' / '+msg.max+' Players';}
   else if(msg.type==='game_init'){
     myId=msg.playerId;mpData={players:msg.players,obstacles:msg.obstacles,mapWidth:msg.mapWidth,mapHeight:msg.mapHeight};
     // Canvas auf Server-Dimensionen setzen
@@ -446,12 +446,12 @@ function mpHandle(msg){
     if(phase==='mp-spectate')mpDrawFrame(msg);
   }
   else if(msg.type==='game_over'){mpEnd(msg);}
-  else if(msg.type==='error'){errEl.textContent=msg.message||'Serverfehler.';showScreen('menu');phase='menu';disconnect();}
+  else if(msg.type==='error'){errEl.textContent=msg.message||'Server error.';showScreen('menu');phase='menu';disconnect();}
 }
 
 function mpDrawPreview(){
   if(!mpData)return;drawBg(mpData.obstacles);
-  for(const p of mpData.players){drawTrail(fakeTrail(p.x,p.y,p.angle),100,h2r(p.colorHex));ctx.beginPath();ctx.arc(p.x,p.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex;ctx.fill();if(p.id===myId){ctx.fillStyle='#fff';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText('Das bist du!',p.x,p.y-PRADIUS-12);}}
+  for(const p of mpData.players){drawTrail(fakeTrail(p.x,p.y,p.angle),100,h2r(p.colorHex));ctx.beginPath();ctx.arc(p.x,p.y,PRADIUS,0,Math.PI*2);ctx.fillStyle=p.colorHex;ctx.fill();if(p.id===myId){ctx.fillStyle='#fff';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText('This is you!',p.x,p.y-PRADIUS-12);}}
 }
 
 function mpDrawFrame(msg){
@@ -483,18 +483,18 @@ function mpDrawFrame(msg){
     console.log('[CLIENT] Switching to spectate, reason:',mpLocal.deathReason||'unknown');
     phase='mp-spectate';
     specEl.style.display='block';
-    specEl.textContent='Du schaust zu ('+(mpLocal.deathReason||'unbekannt')+')';
+    specEl.textContent='Spectating ('+(mpLocal.deathReason||'unknown')+')';
   }
   // Serverseitiger Tod (durch anderen Spieler)
   if(me&&!me.alive&&mpLocal&&mpLocal.alive){
     console.log('[SERVER DEATH] Server says you are dead');
     if(!me._exploded){me._exploded=true;spawnExplosion(me.x,me.y,me.colorHex||'#e74c3c');}
     mpLocal.alive=false;
-    mpLocal.deathReason='Spieler-Kollision (Server)';
+    mpLocal.deathReason='Player collision (Server)';
     if(phase==='mp-active'){
       phase='mp-spectate';
       specEl.style.display='block';
-      specEl.textContent='Du schaust zu (Spieler-Kollision)';
+      specEl.textContent='Spectating (Player collision)';
     }
   }
 }
@@ -504,14 +504,14 @@ function mpEnd(msg){
   mpLocal=null;mpLastServerState=null;
   phase='result';hudEl.classList.add('hidden');specEl.style.display='none';cdEl.style.display='none';
   const tEl=document.getElementById('result-title'),sEl=document.getElementById('result-sub');
-  if(msg.winnerId===myId){tEl.style.color='#2ecc71';tEl.textContent='Sieg!';sEl.textContent='Du hast gewonnen!';}
-  else if(!msg.winnerId){tEl.style.color='#f39c12';tEl.textContent='Unentschieden';sEl.textContent='Alle gleichzeitig ausgeschieden.';}
-  else{tEl.style.color='#e74c3c';tEl.textContent='Niederlage';sEl.textContent='Ein anderer Spieler hat gewonnen.';}
-  sEl.textContent+=' | Zeit: '+(msg.elapsedMs/1000).toFixed(1)+'s';
+  if(msg.winnerId===myId){tEl.style.color='#2ecc71';tEl.textContent='Victory!';sEl.textContent='You won!';}
+  else if(!msg.winnerId){tEl.style.color='#f39c12';tEl.textContent='Draw';sEl.textContent='Everyone eliminated simultaneously.';}
+  else{tEl.style.color='#e74c3c';tEl.textContent='Defeat';sEl.textContent='Another player won.';}
+  sEl.textContent+=' | Time: '+(msg.elapsedMs/1000).toFixed(1)+'s';
   spLastMode=mpMode==='1v1'||mpMode==='1v1-clean'?'1v1':'multi';
   const btnAgain=document.getElementById('btn-again');
-  if(mpMode==='1v1'||mpMode==='1v1-clean'){btnAgain.textContent='Nochmal (1v1)';btnAgain.className='btn-1v1';}
-  else{btnAgain.textContent='Nochmal (5 Spieler)';btnAgain.className='btn-5p';}
+  if(mpMode==='1v1'||mpMode==='1v1-clean'){btnAgain.textContent='Play Again (1v1)';btnAgain.className='btn-1v1';}
+  else{btnAgain.textContent='Play Again (5 Players)';btnAgain.className='btn-5p';}
   showScreen('result');
   setCanvasSize(isPortrait()?GAME_W_PORTRAIT:GAME_W_LANDSCAPE,isPortrait()?GAME_H_PORTRAIT:GAME_H_LANDSCAPE);
   applyZoom();spInit();spDrawPreview();
